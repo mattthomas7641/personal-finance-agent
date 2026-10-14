@@ -36,7 +36,9 @@ How to work:
   year and next, employer match), savings/retirement goals with required monthly amounts, 3-month cash flow,
   where spending has room to trim, a budget plan that frees up what the goals need, the Roth IRA tracker
   (limit after income phase-out, contributed, monthly needed) and retirement (FI number, Coast FIRE number,
-  projection, age you reach each). Use it for any question
+  projection, age you reach each).
+- get_plan returns the FIRE plan (e.g. "$1.5M-$2.0M by 40"): verdict, how much more to invest, how much to cut,
+  alternatives, net worth vs targets, subscriptions. If the user asked you to be harsh, be direct about the numbers. Use it for any question
   about goals, retirement, 401(k), budgets or cutting back. Explain its numbers; don't recompute them differently.
 - Finish by calling final_answer. Every number in it must come from a tool result in this conversation;
   a checker rejects answers with unsupported numbers.
@@ -62,6 +64,8 @@ TOOL_SPECS = [
     {"name": "get_insights", "description": "Detected subscriptions (with price changes), duplicate charges and unusual charges.",
      "strict": True, "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False}},
     {"name": "get_goals", "description": "401(k) and Roth IRA status, retirement/FI and Coast FIRE projections, savings goals, cash flow, where to cut, and a budget plan.",
+     "strict": True, "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False}},
+    {"name": "get_plan", "description": "FIRE plan: target amount/age, verdict per target, extra investing and spending cuts needed, auto-generated alternatives (later age, reachable amount, income, return), net worth, subscriptions, and blunt per-category cuts.",
      "strict": True, "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False}},
     {"name": "make_chart", "description": "Chart a 2-column query result (label, value). kind: bar or line.",
      "strict": True, "input_schema": {"type": "object", "properties": {
@@ -124,6 +128,10 @@ class FinanceAgent:
             return out, not ok
         if name == "get_insights":
             out = tools.get_insights()
+            self.evidence.append(out)
+            return out, False
+        if name == "get_plan":
+            out = tools.get_plan()
             self.evidence.append(out)
             return out, False
         if name == "get_goals":

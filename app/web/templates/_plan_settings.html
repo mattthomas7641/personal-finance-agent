@@ -1,0 +1,10 @@
+<form method="post" action="/plan/settings" class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 text-sm text-zinc-700">
+  <label>Birth year<input name="birth_year" class="field mt-1" inputmode="numeric" value="{{ birth or '' }}" placeholder="1999"></label>
+  <label>Retire at age<input name="retirement_age" class="field mt-1" inputmode="numeric" value="{{ rp.retirement_age }}"></label>
+  <label>Return after inflation %<input name="expected_return_pct" class="field mt-1" inputmode="decimal" value="{{ rp.expected_return_pct }}"></label>
+  <label>Goal, low end ($)<input name="fire_target_low" class="field mt-1" inputmode="decimal" value="{{ rp.fire_target_low|int if rp.fire_target_low else '' }}" placeholder="1500000"></label>
+  <label>Goal, high end ($)<input name="fire_target_high" class="field mt-1" inputmode="decimal" value="{{ rp.fire_target_high|int if rp.fire_target_high else '' }}" placeholder="2000000"></label>
+  <label class="flex items-center gap-2 sm:mt-6"><input type="checkbox" name="harsh" value="1" class="accent-zinc-900" {% if rp.harsh %}checked{% endif %}> Be blunt about spending</label>
+  <button class="btn btn-primary col-span-2 sm:col-span-3">Save</button>
+</form>
+{% if saved %}<p class="text-xs text-emerald-700 mt-2">Saved.</p>{% endif %}

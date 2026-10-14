@@ -142,9 +142,12 @@ def sync_plaid() -> dict:
                 stats["needs_attention"].append(item.institution or item.id)
                 continue
             for a in client.accounts_get(AccountsGetRequest(access_token=load_secret(item.access_token)))["accounts"]:
+                bal = (a.get("balances") or {}).get("current")
                 with session() as s:
                     s.merge(Account(id=a["account_id"], name=a["name"], type=str(a["type"]), mask=a.get("mask") or "",
-                                    source="plaid", item_id=item.id))
+                                    source="plaid", item_id=item.id,
+                                    balance_current=float(bal) if bal is not None else None,
+                                    balance_updated=datetime.now(timezone.utc)))
                     s.commit()
             for attempt in range(3):  # Plaid asks to restart pagination if data changes mid-sync
                 cursor, added, modified, removed = item.cursor, [], [], []
