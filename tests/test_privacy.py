@@ -121,3 +121,72 @@ def test_plaintext_tokens_migrated_on_startup():
     with session() as s:
         ref = s.get(PlaidItem, "item-legacy").access_token
     assert ref == "keychain:item-legacy" and privacy.load_secret(ref) == "access-sandbox-PLAINTEXT"
+
+
+# ---------------- disconnecting a bank ----------------
+
+class FakePlaid:
+    def __init__(self, exc=None):
+        self.exc, self.removed = exc, []
+
+    def item_remove(self, req):
+        if self.exc:
+            raise self.exc
+        self.removed.append(req.access_token)
+
+
+def _connect(item_id="itm1"):
+    from app.models import Account
+    ref = privacy.store_secret(item_id, "access-production-TOKEN")
+    with session() as s:
+        s.merge(PlaidItem(id=item_id, access_token=ref, institution="Test Bank"))
+        s.merge(Account(id=f"{item_id}-acc", name="Checking", source="plaid", item_id=item_id))
+        s.merge(Txn(id=f"{item_id}-t1", account_id=f"{item_id}-acc", date=dt.date(2026, 9, 3), amount=12.0, raw_name="CAFE"))
+        s.commit()
+    return ref
+
+
+def test_disconnect_calls_plaid_and_forgets_token(monkeypatch):
+    from app.ingest import sources
+    ref = _connect()
+    fake = FakePlaid()
+    monkeypatch.setattr(sources, "plaid_client", lambda: fake)
+    res = sources.disconnect_item("itm1", keep_history=True)
+    assert fake.removed == ["access-production-TOKEN"] and res["status"] == "removed at Plaid"
+    with session() as s:
+        assert s.get(PlaidItem, "itm1") is None and s.get(Txn, "itm1-t1") is not None  # history kept
+    with pytest.raises(RuntimeError):
+        privacy.load_secret(ref)
+
+
+def test_disconnect_can_delete_history(monkeypatch):
+    from app.ingest import sources
+    from app.models import Account
+    _connect("itm2")
+    monkeypatch.setattr(sources, "plaid_client", lambda: FakePlaid())
+    assert sources.disconnect_item("itm2", keep_history=False)["deleted_transactions"] == 1
+    with session() as s:
+        assert s.get(Txn, "itm2-t1") is None and s.get(Account, "itm2-acc") is None
+
+
+def test_disconnect_keeps_item_if_plaid_fails(monkeypatch):
+    from plaid.exceptions import ApiException
+    from app.ingest import sources
+    _connect("itm3")
+    err = ApiException(status=500, reason="boom")
+    err.body = '{"error_code": "INTERNAL_SERVER_ERROR"}'
+    monkeypatch.setattr(sources, "plaid_client", lambda: FakePlaid(err))
+    with pytest.raises(RuntimeError, match="nothing was deleted"):
+        sources.disconnect_item("itm3")
+    with session() as s:
+        assert s.get(PlaidItem, "itm3") is not None  # still tracked, so billing can't silently continue
+
+
+def test_disconnect_when_plaid_already_removed_it(monkeypatch):
+    from plaid.exceptions import ApiException
+    from app.ingest import sources
+    _connect("itm4")
+    err = ApiException(status=400, reason="bad")
+    err.body = '{"error_code": "ITEM_NOT_FOUND"}'
+    monkeypatch.setattr(sources, "plaid_client", lambda: FakePlaid(err))
+    assert sources.disconnect_item("itm4")["status"] == "already gone at Plaid"

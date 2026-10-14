@@ -263,6 +263,17 @@ async def connect_sandbox():
     return back("/connect")
 
 
+@app.post("/connect/{item_id}/disconnect")
+async def connect_disconnect(item_id: str, keep_history: str = Form("")):
+    try:
+        res = await asyncio.to_thread(sources.disconnect_item, item_id, bool(keep_history))
+    except Exception as e:
+        return back(f"/connect?error={quote(str(e))}")
+    STATUS["message"] = (f"Bank disconnected ({res['status']}). Plaid stops billing for it."
+                         + (f" Deleted {res['deleted_transactions']} transactions." if res["deleted_transactions"] else " Your past transactions were kept."))
+    return back("/connect")
+
+
 @app.post("/connect/sync")
 async def connect_sync():
     asyncio.create_task(background("Plaid sync", sources.sync_plaid))

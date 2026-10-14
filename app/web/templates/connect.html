@@ -32,6 +32,22 @@
   </form>
 </div>
 
+{% if items %}
+<div class="card p-5 mt-4">
+  <h2 class="font-semibold mb-1">Connected banks</h2>
+  <p class="text-sm text-zinc-600 mb-3">Each bank login is one Plaid "Item"{% if plaid_env == "production" %} (billed about $0.30/month){% endif %}. Disconnecting tells Plaid to stop access, which ends the charge, and deletes the stored token.</p>
+  {% for it in items %}
+    <form method="post" action="/connect/{{ it.id }}/disconnect" class="flex flex-wrap items-center gap-3 border-t border-zinc-100 py-2"
+          onsubmit="return confirm('Disconnect {{ (it.institution or 'this bank')|e }}? Plaid will stop syncing it.')">
+      <span class="text-sm font-medium flex-1">{{ it.institution or "Bank" }} <span class="pill">{{ it.env }}</span>
+        <span class="text-zinc-400 font-normal">· connected {{ it.created_at.strftime("%b %d, %Y") }}</span></span>
+      <label class="text-xs text-zinc-600 flex items-center gap-1"><input type="checkbox" name="keep_history" value="1" checked> keep past transactions</label>
+      <button class="btn">Disconnect</button>
+    </form>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="card p-5 mt-4">
   <h2 class="font-semibold mb-2">Accounts</h2>
   <table class="w-full text-sm"><tbody>
