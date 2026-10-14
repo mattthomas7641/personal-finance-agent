@@ -99,3 +99,16 @@ def test_upload_route():
         r = c.post("/retirement/import-fidelity", files={"file": ("bank.csv", "a,b\n1,2\n", "text/csv")})
         assert "error=" in r.headers["location"]
         assert c.get("/retirement").status_code == 200
+
+
+def test_lowercase_headers_and_employer_named_401k():
+    """Fidelity's 2026 export: lowercase headers, CRLF, and the 401(k) named after the employer."""
+    new = ("\ufeffAccount number,Account name,Symbol,Description,Quantity,Last price,Last price change,Current value,"
+           "Today's gain/loss dollar,Today's gain/loss percent,Total gain/loss dollar,Total gain/loss percent,"
+           "Percent of account,Cost basis total,Average cost basis,Type\r\n"
+           "Z11112222,Individual,SPAXX**,HELD IN MONEY MARKET,,,,$100.00,,,,,1.00%,,,Cash,\r\n"
+           "55667788,ACME CONSULTING,FX2060,FREEDOM 2060,10,$20.00,,$200.00,,,,,100%,,,,\r\n"
+           "\r\n\"Date downloaded Oct-14-2026 10:31 a.m ET\"\r\n")
+    accts = {a["number_last4"]: a for a in parse_fidelity_positions(new)}
+    assert accts["2222"]["kind"] == "brokerage" and accts["2222"]["value"] == 100
+    assert accts["7788"]["kind"] == "401k" and accts["7788"]["value"] == 200
