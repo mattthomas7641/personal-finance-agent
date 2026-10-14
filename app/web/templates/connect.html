@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h1 class="text-xl font-semibold mb-1">Accounts</h1>
-<p class="text-sm text-zinc-600 mb-4">Everything stays on this computer in <span class="mono">data/ledger.db</span>. Bank logins happen inside Plaid's own window; this app never sees your bank password, and the Plaid access token is never shown to the AI.</p>
+<p class="text-sm text-zinc-600 mb-4">Everything stays on this computer in <span class="mono">data/ledger.db</span>. Bank logins happen inside Plaid's own window; this app never sees your bank password, and the Plaid access token is never shown to the AI. Read the <a class="underline" href="https://mattthomas7641.github.io/northstar/privacy.html" target="_blank" rel="noopener">privacy policy</a>.</p>
 {% if error %}<div class="mb-4 text-sm text-red-800 bg-red-50 rounded-lg p-3">{{ error }}</div>{% endif %}
 {% if not has_anthropic %}<div class="mb-4 text-sm text-amber-800 bg-amber-50 rounded-lg p-3">No <span class="mono">ANTHROPIC_API_KEY</span> in <span class="mono">.env</span>. Importing works, but AI categorization and questions won't until you add one.</div>{% endif %}
 
