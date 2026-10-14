@@ -183,14 +183,20 @@ def retirement_plan_save(birth_year: str = Form(""), retirement_age: str = Form(
                          filing_status: str = Form("single"), magi: str = Form(""), roth_contributed: str = Form("0"),
                          roth_detect_pattern: str = Form(""), roth_target: str = Form(""), include_gap_in_plan: str = Form("")):
     with session() as s:
-        s.merge(RetirementPlan(
-            id=1, birth_year=int(birth_year) if birth_year.strip() else None,
-            retirement_age=int(_num(retirement_age, 60)), annual_spending=_num(annual_spending) if annual_spending.strip() else None,
-            withdrawal_rate_pct=_num(withdrawal_rate_pct, 4) or 4, expected_return_pct=_num(expected_return_pct, 5),
-            filing_status=filing_status if filing_status in ("single", "mfj", "mfs") else "single",
-            magi=_num(magi) if magi.strip() else None, roth_contributed=_num(roth_contributed),
-            roth_detect_pattern=roth_detect_pattern.strip(), roth_target=bool(roth_target),
-            include_gap_in_plan=bool(include_gap_in_plan)))
+        # Update in place: this form doesn't include the Plan page's fields (target, blunt mode), which must survive.
+        rp = s.get(RetirementPlan, 1) or RetirementPlan(id=1)
+        rp.birth_year = int(birth_year) if birth_year.strip() else None
+        rp.retirement_age = int(_num(retirement_age, rp.retirement_age))
+        rp.annual_spending = _num(annual_spending) if annual_spending.strip() else None
+        rp.withdrawal_rate_pct = _num(withdrawal_rate_pct, 4) or 4
+        rp.expected_return_pct = _num(expected_return_pct, 5)
+        rp.filing_status = filing_status if filing_status in ("single", "mfj", "mfs") else "single"
+        rp.magi = _num(magi) if magi.strip() else None
+        rp.roth_contributed = _num(roth_contributed)
+        rp.roth_detect_pattern = roth_detect_pattern.strip()
+        rp.roth_target = bool(roth_target)
+        rp.include_gap_in_plan = bool(include_gap_in_plan)
+        s.add(rp)
         s.commit()
     return back("/retirement?saved=1")
 
