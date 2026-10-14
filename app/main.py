@@ -21,8 +21,9 @@ from app.categorize import categorize_pending, correct
 from app.config import CATEGORIES, NON_SPEND, load_config
 from app.db import init_db, session
 from app.ingest import sources
-from app.models import Account, AgentRun, AgentStep, Budget, Goal, Outbound, PlaidItem, Plan401k, RetirementAccount, RetirementPlan, Rule, Txn
+from app.models import Account, AgentRun, AgentStep, Budget, CashAccount, Goal, Outbound, PlaidItem, Plan401k, RetirementAccount, RetirementPlan, Rule, Txn
 from app import retirement
+from app import cash
 from app import planning
 import datetime as dt
 from app import privacy, security
@@ -139,7 +140,7 @@ def dashboard(request: Request, month: str = ""):
         goals_ov = None
     with session() as s:
         attention = s.exec(select(PlaidItem).where(PlaidItem.status != "ok")).all()
-    return render(request, "dashboard.html", month=month, months=months, s=summary, ins=ins, attention=attention,
+    return render(request, "dashboard.html", month=month, months=months, s=summary, ins=ins, attention=attention, cash=cash.summary(),
                   trend=trend_items, uncategorized=uncategorized, recent=recent, gov=goals_ov)
 
 
@@ -237,7 +238,7 @@ def connect(request: Request, error: str = ""):
         items = s.exec(select(PlaidItem)).all()
         accounts = s.exec(select(Account)).all()
         counts = dict(s.exec(select(Txn.account_id, func.count()).group_by(Txn.account_id)).all())
-    return render(request, "connect.html", items=items, accounts=accounts, counts=counts, error=error,
+    return render(request, "connect.html", items=items, accounts=accounts, counts=counts, error=error, cash=cash.summary(),
                   plaid_ready=bool(os.environ.get("PLAID_CLIENT_ID") and os.environ.get("PLAID_SECRET")),
                   plaid_env=sources.plaid_env(), has_anthropic=bool(os.environ.get("ANTHROPIC_API_KEY")))
 
@@ -289,6 +290,33 @@ async def connect_disconnect(item_id: str, keep_history: str = Form("")):
     STATUS["message"] = (f"Bank disconnected ({res['status']}). Plaid stops billing for it."
                          + (f" Deleted {res['deleted_transactions']} transactions." if res["deleted_transactions"] else " Your past transactions were kept."))
     return back("/connect")
+
+
+@app.post("/accounts/manual")
+def manual_add(name: str = Form(...), kind: str = Form("savings"), balance: str = Form("0"), apy_pct: str = Form("0"),
+               detect_pattern: str = Form("")):
+    with session() as s:
+        s.add(CashAccount(name=name.strip(), kind=kind, balance=_num(balance), apy_pct=_num(apy_pct),
+                          as_of=dt.date.today(), detect_pattern=detect_pattern.strip()))
+        s.commit()
+    return back("/connect#manual")
+
+
+@app.post("/accounts/manual/{aid}")
+def manual_update(aid: int, balance: str = Form(...), apy_pct: str = Form("0"), detect_pattern: str = Form(""),
+                  delete: str = Form("")):
+    with session() as s:
+        a = s.get(CashAccount, aid)
+        if a and delete:
+            for g in s.exec(select(Goal).where(Goal.account_id == aid)).all():
+                g.account_id = None
+                s.add(g)
+            s.delete(a)
+        elif a:
+            a.balance, a.apy_pct, a.detect_pattern, a.as_of = _num(balance), _num(apy_pct), detect_pattern.strip(), dt.date.today()
+            s.add(a)
+        s.commit()
+    return back("/connect#manual")
 
 
 @app.post("/connect/sync")
@@ -460,7 +488,7 @@ def goals_page(request: Request, saved: str = ""):
         plan = s.get(Plan401k, 1) or Plan401k()
         goals = s.exec(select(Goal).order_by(Goal.target_date)).all()
     ov = planning.overview()
-    return render(request, "goals.html", ov=ov, plan=plan, goals=goals, saved=saved, categories=CATEGORIES,
+    return render(request, "goals.html", ov=ov, plan=plan, goals=goals, saved=saved, categories=CATEGORIES, cash_accounts=cash.accounts(),
                   sched=planning.detect_paychecks(), today=dt.date.today())
 
 
@@ -482,9 +510,11 @@ def save_401k(annual_salary: str = Form(...), contribution_pct: str = Form(...),
 
 @app.post("/goals/new")
 def goal_new(name: str = Form(...), kind: str = Form("savings"), target_amount: str = Form(...), target_date: str = Form(...),
-             current_amount: str = Form("0"), monthly_contribution: str = Form("0"), expected_return_pct: str = Form("5")):
+             current_amount: str = Form("0"), monthly_contribution: str = Form("0"), expected_return_pct: str = Form("5"),
+             account_id: str = Form("")):
     with session() as s:
         s.add(Goal(name=name.strip(), kind=kind if kind in ("savings", "retirement") else "savings",
+                   account_id=int(account_id) if account_id.strip() else None,
                    target_amount=_num(target_amount), target_date=dt.date.fromisoformat(target_date),
                    current_amount=_num(current_amount), monthly_contribution=_num(monthly_contribution),
                    expected_return_pct=_num(expected_return_pct, 5)))
@@ -493,10 +523,13 @@ def goal_new(name: str = Form(...), kind: str = Form("savings"), target_amount: 
 
 
 @app.post("/goals/{gid}/update")
-def goal_update(gid: int, current_amount: str = Form(...), monthly_contribution: str = Form(...)):
+def goal_update(gid: int, current_amount: str = Form("0"), monthly_contribution: str = Form("0"), account_id: str = Form("")):
     with session() as s:
         g = s.get(Goal, gid)
-        g.current_amount, g.monthly_contribution = _num(current_amount), _num(monthly_contribution)
+        g.account_id = int(account_id) if account_id.strip() else None
+        if not g.account_id:  # a linked goal takes "saved so far" from the account, so keep the stored value
+            g.current_amount = _num(current_amount)
+        g.monthly_contribution = _num(monthly_contribution)
         s.add(g)
         s.commit()
     return back("/goals#goals")

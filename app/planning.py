@@ -319,6 +319,18 @@ def months_between(a: date, b: date) -> int:
 def goal_status(g: Goal, today: date | None = None, k401: K401Status | None = None) -> dict:
     today = today or date.today()
     n = months_between(today, g.target_date)
+    linked = None
+    if g.account_id:  # follow a manual account: its balance is "saved so far", detected transfers the monthly amount
+        from app.cash import monthly_deposits
+        from app.models import CashAccount
+        with session() as s:
+            acct = s.get(CashAccount, g.account_id)
+        if acct:
+            dep, _ = monthly_deposits(acct.detect_pattern, today)
+            linked = {"name": acct.name, "balance": acct.balance, "detected_monthly": dep,
+                      "apy_pct": acct.apy_pct, "pattern": acct.detect_pattern}
+            g = g.model_copy(update={"current_amount": acct.balance,
+                                     "monthly_contribution": g.monthly_contribution or max(0.0, dep)})
     if g.kind == "retirement":
         r = (g.expected_return_pct or 0) / 100 / 12
         monthly = g.monthly_contribution
@@ -330,15 +342,19 @@ def goal_status(g: Goal, today: date | None = None, k401: K401Status | None = No
         required_monthly = max(0.0, needed * r / (grow - 1) if r and grow > 1 else needed / max(n, 1))
     else:
         monthly = g.monthly_contribution
-        projected = g.current_amount + monthly * n
-        required_monthly = max(0.0, (g.target_amount - g.current_amount) / max(n, 1))
+        r = (linked["apy_pct"] / 100 / 12) if linked and linked["apy_pct"] else 0.0  # a HYSA earns interest meanwhile
+        grow = (1 + r) ** n
+        projected = g.current_amount * grow + (monthly * (grow - 1) / r if r else monthly * n)
+        needed = g.target_amount - g.current_amount * grow
+        required_monthly = max(0.0, needed * r / (grow - 1) if r and grow > 1 else needed / max(n, 1))
     gap = round(required_monthly - monthly, 2)
     return {"id": g.id, "name": g.name, "kind": g.kind, "target": g.target_amount, "target_date": g.target_date.isoformat(),
             "months_left": n, "current": g.current_amount, "monthly_now": round(monthly, 2),
             "required_monthly": round(required_monthly, 2), "projected": round(projected, 2),
             "on_track": projected >= g.target_amount - 1, "monthly_gap": max(0.0, gap),
             "progress_pct": round(min(100, g.current_amount / g.target_amount * 100), 1) if g.target_amount else 0,
-            "assumed_return_pct": g.expected_return_pct if g.kind == "retirement" else None}
+            "assumed_return_pct": g.expected_return_pct if g.kind == "retirement" else None, "linked_account": linked,
+            "account_id": g.account_id}
 
 
 def overview(today: date | None = None) -> dict:
@@ -374,11 +390,16 @@ def overview(today: date | None = None) -> dict:
         ret_need = max(0.0, ret.monthly_gap - extra_401k_monthly_total)  # a planned 401(k) raise already closes part of it
     need += roth_need + ret_need
     return {"today": today.isoformat(), "k401": asdict(k) if k else None, "goals": statuses,
-            "cash_flow": cash_flow(today), "where_to_cut": where_to_cut(today)[:6],
+            "cash_flow": cash_flow(today), "where_to_cut": where_to_cut(today)[:6], "cash_accounts": _cash_summary(today),
             "monthly_needed_for_goals": round(need, 2), "monthly_needed_for_401k": round(k401_need, 2),
             "monthly_needed_for_roth": round(roth_need, 2), "monthly_needed_for_retirement": round(ret_need, 2),
             "roth": asdict(roth), "retirement": asdict(ret) if ret else None,
             "plan": cut_plan(need, today) if need > 0 else None, "budgets": budgets(), "disclaimer": DISCLAIMER}
+
+
+def _cash_summary(today: date) -> dict:
+    from app.cash import summary
+    return summary(today)
 
 
 def _plan() -> Plan401k | None:

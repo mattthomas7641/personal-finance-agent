@@ -111,6 +111,17 @@ class RetirementAccount(SQLModel, table=True):
     holdings: int = 0  # number of positions in the last import
 
 
+class CashAccount(SQLModel, table=True):
+    """Accounts Plaid can't connect (e.g. a HYSA whose bank blocks aggregators). Balance entered by hand."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    kind: str = "savings"  # savings | checking | cd | cash | other
+    balance: float = 0
+    apy_pct: float = 0
+    as_of: Optional[dt.date] = None
+    detect_pattern: str = ""  # text in your checking transactions when you move money here, e.g. "MARCUS" or "ALLY"
+
+
 class Goal(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
@@ -120,6 +131,7 @@ class Goal(SQLModel, table=True):
     current_amount: float = 0
     monthly_contribution: float = 0
     expected_return_pct: float = 5.0  # retirement goals only; your assumption, after inflation
+    account_id: Optional[int] = None  # linked CashAccount: "saved so far" follows its balance
     created_at: datetime = Field(default_factory=now)
 
 
