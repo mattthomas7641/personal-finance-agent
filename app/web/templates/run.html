@@ -1,30 +1,37 @@
 {% extends "base.html" %}
-{% block title %}{{ run.question[:60] }}{% endblock %}
+{% from "_ui.html" import badge, alert, icon, I %}
+{% block title %}{{ run.question[:60] }} · Northstar{% endblock %}
 {% block content %}
-<a href="/runs" class="text-sm text-zinc-500 hover:text-zinc-800">← Questions</a>
-<h1 class="text-xl font-semibold mt-1 mb-4">{{ run.question }}</h1>
+<a href="/runs" class="hint hover:underline">Questions</a>
+<div class="page-h mt-1"><div class="min-w-0"><h1>{{ run.question }}</h1>
+  <p>{{ run.turns }} steps · ${{ "%.3f"|format(run.cost_usd) }}</p></div>
+  <div>{% if run.status == "running" %}{{ badge("Running", "info") }}{% elif run.verified %}{{ badge("Verified", "ok") }}{% elif run.status == "done" %}{{ badge("Unverified", "warn") }}{% else %}{{ badge(run.status|capitalize, "bad") }}{% endif %}</div></div>
 
 {% if run.status != "running" %}
-  <div class="card p-5 mb-4 {{ '!border-emerald-300' if run.verified else ('!border-amber-300' if run.status == 'done' else '!border-red-300') }}">
-    <div class="text-xs font-medium mb-2 {{ 'text-emerald-700' if run.verified else 'text-amber-700' }}">
-      {% if run.verified %}✓ Verified: every number below came from a query or calculation on your data{% elif run.status == 'done' %}⚠ Some numbers couldn't be verified. Check the steps below.{% else %}{{ run.status }}{% endif %}
-      <span class="text-zinc-400 font-normal">· {{ run.turns }} steps · ${{ "%.3f"|format(run.cost_usd) }}</span></div>
-    <div class="pre leading-relaxed">{{ run.answer }}</div>
-    {% for c in charts %}<div class="mt-4"><div class="text-sm font-medium mb-1">{{ c.title }}</div><canvas id="chart{{ loop.index }}" height="100"></canvas></div>{% endfor %}
-  </div>
-  <div class="card p-4 mb-4">{% with parent=run.id, placeholder="Ask a follow-up…" %}{% include "_ask.html" %}{% endwith %}</div>
+  <section class="panel mb-5">
+    <div class="panel-h"><h2>Answer</h2></div>
+    <div class="panel-b">
+      {% if run.verified %}{% call alert("ok", "mb-4") %}Every number below came from a query or calculation on your data.{% endcall %}
+      {% elif run.status == "done" %}{% call alert("warn", "mb-4") %}Some numbers couldn't be verified. Check the steps below.{% endcall %}{% endif %}
+      <div class="pre leading-relaxed text-[14px] max-w-[75ch]">{{ run.answer }}</div>
+      {% for c in charts %}<div class="mt-5"><div class="text-[13px] font-medium mb-2">{{ c.title }}</div><div class="relative h-56"><canvas id="chart{{ loop.index }}"></canvas></div></div>{% endfor %}
+    </div>
+    <div class="panel-f">{% with parent=run.id, placeholder="Ask a follow-up" %}{% include "_ask.html" %}{% endwith %}</div>
+  </section>
 {% else %}
-  <div class="text-sm text-blue-800 bg-blue-50 rounded-lg px-3 py-2 mb-4">Working… the page updates when the answer is ready.</div>
+  {% call alert("info", "mb-5") %}Working on it. This page updates when the answer is ready.{% endcall %}
 {% endif %}
 
-<details {% if run.status == "running" %}open{% endif %} class="mb-6"><summary class="text-sm text-zinc-600 cursor-pointer mb-2">How the agent got this answer</summary>
-  <div id="trace" class="space-y-2"></div></details>
+<details {% if run.status == "running" %}open{% endif %} class="panel">
+  <summary class="panel-h !border-0"><h2 class="flex items-center gap-1.5"><span class="chev c-muted">{{ icon(I.chev, 14) }}</span>How the agent got this answer</h2></summary>
+  <div id="trace" class="space-y-2 px-4 pb-4"></div>
+</details>
 
 <script>
 {% for c in charts %}
 new Chart(document.getElementById('chart{{ loop.index }}'), {type: {{ c.kind|tojson }},
-  data: {labels: {{ c.labels|tojson }}, datasets: [{data: {{ c["values"]|tojson }}, backgroundColor: '#27272a', borderColor: '#27272a', borderRadius: 4, tension: .25}]},
-  options: {plugins: {legend: {display: false}}}});
+  data: {labels: {{ c.labels|tojson }}, datasets: [{data: {{ c["values"]|tojson }}, backgroundColor: '#2451c7', borderColor: '#2451c7', borderRadius: 3, tension: .25, maxBarThickness: 36}]},
+  options: {maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {x: {grid: {display: false}}, y: {border: {display: false}}}}});
 {% endfor %}
 const es = new EventSource('/runs/{{ run.id }}/stream');
 es.addEventListener('step', e => document.getElementById('trace').insertAdjacentHTML('beforeend', e.data));

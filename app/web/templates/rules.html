@@ -1,22 +1,29 @@
 {% extends "base.html" %}
+{% from "_ui.html" import page_header %}
+{% block title %}Rules · Northstar{% endblock %}
 {% block content %}
-<h1 class="text-xl font-semibold mb-3">Rules</h1>
-<div class="grid md:grid-cols-3 gap-4">
-  <div class="card p-4 md:col-span-2">
-    <h2 class="font-semibold mb-1">Your corrections</h2>
-    <p class="text-sm text-zinc-600 mb-3">Made automatically when you change a category. Checked before anything else, so the AI never overrides you.</p>
-    <table class="w-full text-sm"><tbody>
-    {% for r in rules %}<tr class="border-t border-zinc-100"><td class="py-1.5 mono text-xs">{{ r.pattern }}</td><td>→ {{ r.category }}</td>
-      <td class="text-right"><form method="post" action="/rules/{{ r.id }}/delete"><button class="text-xs text-zinc-500 underline">delete</button></form></td></tr>
-    {% else %}<tr><td class="text-zinc-500 py-2">None yet. Fix a category on the Transactions page.</td></tr>{% endfor %}
-    </tbody></table>
-  </div>
-  <div class="space-y-4">
-    <div class="card p-4"><h2 class="font-semibold mb-2">How transactions were categorized</h2>
-      {% for k, v in by_source.items() %}<div class="flex justify-between text-sm"><span>{{ k or "not yet" }}</span><span class="num">{{ v }}</span></div>{% endfor %}</div>
-    <div class="card p-4"><h2 class="font-semibold mb-2">Monthly budgets</h2>
-      {% for k, v in budgets.items() %}<div class="flex justify-between text-sm"><span>{{ k }}</span><span class="num">{{ v|money }}</span></div>{% endfor %}
-      <p class="text-xs text-zinc-500 mt-2">Edit in <span class="mono">config.yaml</span>.</p></div>
+{% call page_header("Rules", "Your corrections are checked first, so the AI never overrides you.") %}{% endcall %}
+<div class="grid lg:grid-cols-3 gap-5">
+  <section class="panel lg:col-span-2 min-w-0">
+    <div class="panel-h"><h2>Category rules</h2><span class="meta">{{ rules|length }} rules</span></div>
+    <table class="tbl">
+      <thead><tr><th>Description contains</th><th>Category</th><th></th></tr></thead>
+      <tbody>
+      {% for r in rules %}<tr><td class="mono text-[12.5px]">{{ r.pattern }}</td><td>{{ r.category }}</td>
+        <td class="r"><form method="post" action="/rules/{{ r.id }}/delete"><button class="btn btn-sm btn-ghost btn-danger">Delete</button></form></td></tr>
+      {% else %}<tr><td colspan="3" class="c-muted">None yet. Change a category on the Transactions page and a rule is saved here.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <div class="space-y-5 min-w-0">
+    <section class="panel">
+      <div class="panel-h"><h2>How transactions were categorized</h2></div>
+      <dl class="rows px-4 text-[13px]">{% for k, v in by_source.items() %}<div><dt>{{ {"user": "By you", "rule": "Rules", "memory": "Memory", "plaid": "Plaid", "llm": "AI"}.get(k, k or "Not yet") }}</dt><dd>{{ v }}</dd></div>{% endfor %}</dl>
+    </section>
+    <section class="panel">
+      <div class="panel-h"><h2>Monthly budgets</h2><a href="/goals#budgets" class="link text-[12.5px]">Edit</a></div>
+      <dl class="rows px-4 text-[13px]">{% for k, v in budgets.items() %}<div><dt>{{ k }}</dt><dd>{{ v|money0 }}</dd></div>{% else %}<div><dt>No budgets set</dt></div>{% endfor %}</dl>
+    </section>
   </div>
 </div>
 {% endblock %}

@@ -1,6 +1,6 @@
 // Northstar service worker: keeps a copy of the pages you open so the app still shows your
 // last-synced numbers when the Mac is asleep or off. Asking questions and syncing need the Mac.
-const CACHE = "northstar-v5";
+const CACHE = "northstar-v6";
 const ASSETS = ["/static/tailwind.js", "/static/htmx.min.js", "/static/chart.umd.min.js", "/static/icon-180.png"];
 const CORE = ["/", "/plan", "/transactions", "/goals", "/retirement", "/runs"];  // refreshed in the background whenever the Mac is reachable
 let lastRefresh = 0;

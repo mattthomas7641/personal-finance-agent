@@ -14,55 +14,175 @@
   <script src="/static/htmx.min.js"></script>
   <script src="/static/chart.umd.min.js"></script>
   <style>
-    .btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;padding:.55rem .9rem;border-radius:.6rem;font-size:.875rem;font-weight:500;border:1px solid #d4d4d8;background:#fff}
-    .btn:hover{background:#f4f4f5} .btn-primary{background:#18181b;color:#fff;border-color:#18181b} .btn-primary:hover{background:#27272a}
-    .btn:disabled{opacity:.45}
-    .card{background:#fff;border:1px solid #e4e4e7;border-radius:.9rem}
-    .pill{display:inline-block;padding:.15rem .55rem;border-radius:999px;font-size:.75rem;font-weight:500;background:#f4f4f5;color:#3f3f46}
-    .field{width:100%;border:1px solid #d4d4d8;border-radius:.6rem;padding:.55rem .7rem;font-size:16px;background:#fff}
-    @media (min-width:640px){.field{font-size:.875rem}}
-    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace} .pre{white-space:pre-wrap}
-    .num{font-variant-numeric:tabular-nums}
-    .safe-bottom{padding-bottom:calc(env(safe-area-inset-bottom) + .25rem)}
-    body{-webkit-tap-highlight-color:transparent}
+    :root {
+      --bg: #f4f5f7; --panel: #fff; --line: #e3e6eb; --line-soft: #eef0f3; --head: #f9fafb;
+      --ink: #101828; --ink-2: #344054; --ink-3: #667085; --ink-4: #98a2b3;
+      --accent: #2451c7; --accent-hover: #1d42a6; --accent-soft: #eef3ff;
+      --ok: #067647; --ok-bg: #ecfdf3; --ok-line: #abefc6;
+      --warn: #b54708; --warn-bg: #fffaeb; --warn-line: #fedf89;
+      --bad: #b42318; --bad-bg: #fef3f2; --bad-line: #fecdca;
+      --info: #175cd3; --info-bg: #eff8ff; --info-line: #b2ddff;
+    }
+    html { -webkit-text-size-adjust: 100%; }
+    body { background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
+    ::selection { background: #c7d7fe; color: var(--ink); }
+    a { text-underline-offset: 2px; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    .num, td, .stat-v { font-variant-numeric: tabular-nums; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; } .pre { white-space: pre-wrap; }
+    .link { color: var(--accent); } .link:hover { text-decoration: underline; }
+
+    /* Shell */
+    .sidebar { position: fixed; inset: 0 auto 0 0; width: 232px; background: #fbfbfc; border-right: 1px solid var(--line); flex-direction: column; z-index: 30; }
+    .nav-group { padding: 0 .75rem; margin-top: 1.1rem; }
+    .nav-label { font-size: 11.5px; font-weight: 500; color: var(--ink-3); padding: 0 .6rem .35rem; }
+    .nav-item { display: flex; align-items: center; gap: .65rem; padding: .42rem .6rem; border-radius: 6px; color: var(--ink-2); font-weight: 500; font-size: 13.5px; }
+    .nav-item svg { color: var(--ink-4); flex-shrink: 0; }
+    .nav-item:hover { background: #f0f2f5; color: var(--ink); }
+    .nav-item.on { background: var(--accent-soft); color: var(--accent); } .nav-item.on svg { color: var(--accent); }
+
+    /* Page */
+    .page-h { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .75rem 1rem; margin-bottom: 1.25rem; }
+    .page-h h1 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; line-height: 1.25; }
+    .page-h p { color: var(--ink-3); font-size: 13px; margin-top: .2rem; max-width: 70ch; }
+    .panel, .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
+    .panel-h { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .8rem 1rem; border-bottom: 1px solid var(--line-soft); min-height: 48px; }
+    .panel-h h2 { font-size: 14px; font-weight: 600; }
+    .panel-h .meta { font-size: 12.5px; color: var(--ink-3); }
+    .panel-b { padding: 1rem; }
+    .panel-f { padding: .7rem 1rem; border-top: 1px solid var(--line-soft); background: var(--head); border-radius: 0 0 10px 10px; font-size: 12.5px; color: var(--ink-3); }
+    .hint { font-size: 12.5px; color: var(--ink-3); }
+
+    /* KPI strip */
+    .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kpi { padding: .9rem 1rem; border-color: var(--line-soft); }
+    .kpi:nth-child(odd) { border-right: 1px solid var(--line-soft); } .kpi:nth-child(n+3) { border-top: 1px solid var(--line-soft); }
+    .kpi:last-child:nth-child(odd) { grid-column: span 2; border-right: 0; }
+    @media (min-width: 900px) {
+      .kpis { grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); }
+      .kpi { border-top: 0 !important; border-right: 1px solid var(--line-soft); grid-column: auto !important; } .kpi:last-child { border-right: 0; }
+    }
+    .stat-l { font-size: 12.5px; color: var(--ink-3); font-weight: 500; }
+    .stat-v { font-size: 22px; font-weight: 600; letter-spacing: -.015em; margin-top: .15rem; line-height: 1.2; }
+    .stat-s { font-size: 12px; color: var(--ink-3); margin-top: .2rem; }
+
+    /* Tables */
+    .tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .tbl th { text-align: left; font-weight: 500; font-size: 12px; color: var(--ink-3); background: var(--head); padding: .55rem 1rem; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+    .tbl td { padding: .6rem 1rem; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+    .tbl tbody tr:last-child td { border-bottom: 0; }
+    .tbl .r { text-align: right; } .tbl tr.click:hover td { background: #fafbfc; cursor: pointer; }
+    .tbl tr.total td { font-weight: 600; border-top: 1px solid var(--line); background: var(--head); }
+    @media (max-width: 639px) { .tbl th, .tbl td { padding-left: .75rem; padding-right: .75rem; } }
+
+    /* Rows (label/value lists) */
+    .rows > div { display: flex; justify-content: space-between; gap: 1rem; padding: .5rem 0; border-bottom: 1px solid var(--line-soft); }
+    .rows > div:last-child { border-bottom: 0; } .rows dt, .rows .k { color: var(--ink-3); } .rows dd, .rows .v { font-variant-numeric: tabular-nums; text-align: right; }
+
+    /* Controls */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; height: 34px; padding: 0 .8rem; border-radius: 7px; font-size: 13.5px; font-weight: 500;
+      border: 1px solid #d0d5dd; background: #fff; color: var(--ink-2); box-shadow: 0 1px 2px rgba(16, 24, 40, .05); white-space: nowrap; transition: background .12s, border-color .12s; }
+    .btn:hover { background: #f9fafb; border-color: #c2c8d1; color: var(--ink); }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; } .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
+    .btn-sm { height: 28px; padding: 0 .6rem; font-size: 12.5px; }
+    .btn-ghost { border-color: transparent; box-shadow: none; background: transparent; color: var(--ink-3); } .btn-ghost:hover { background: #f2f4f7; border-color: transparent; }
+    .btn-danger:hover { color: var(--bad); border-color: var(--bad-line); background: var(--bad-bg); }
+    .btn:disabled { opacity: .45; pointer-events: none; }
+    .field { width: 100%; height: 36px; border: 1px solid #d0d5dd; border-radius: 7px; padding: 0 .7rem; font-size: 16px; background: #fff; color: var(--ink);
+      box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
+    textarea.field { height: auto; padding: .5rem .7rem; } input[type=file].field { padding: .35rem .5rem; height: auto; }
+    .field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px #dbe5ff; }
+    .field::placeholder { color: var(--ink-4); }
+    @media (min-width: 640px) { .field { font-size: 13.5px; } }
+    label.lbl { display: block; font-size: 12.5px; font-weight: 500; color: var(--ink-2); }
+    label.lbl > .field { margin-top: .3rem; }
+    input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 15px; height: 15px; }
+    details > summary { cursor: pointer; list-style: none; } details > summary::-webkit-details-marker { display: none; }
+    .chev { transition: transform .15s; } details[open] .chev { transform: rotate(90deg); }
+
+    /* Status */
+    .badge, .pill { display: inline-flex; align-items: center; gap: .3rem; height: 20px; padding: 0 .45rem; border-radius: 5px; font-size: 11.5px; font-weight: 500;
+      border: 1px solid var(--line); background: #f9fafb; color: var(--ink-2); white-space: nowrap; vertical-align: middle; }
+    .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .85; }
+    .badge.plain::before, .pill::before { display: none; }
+    .t-ok { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-line); }
+    .t-warn { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-line); }
+    .t-bad { color: var(--bad); background: var(--bad-bg); border-color: var(--bad-line); }
+    .t-info { color: var(--info); background: var(--info-bg); border-color: var(--info-line); }
+    .t-muted { color: var(--ink-3); }
+    .c-ok { color: var(--ok); } .c-warn { color: var(--warn); } .c-bad { color: var(--bad); } .c-muted { color: var(--ink-3); }
+    .alert { display: flex; gap: .6rem; align-items: flex-start; padding: .65rem .85rem; border-radius: 8px; border: 1px solid; font-size: 13.5px; }
+    .alert svg { flex-shrink: 0; margin-top: 1px; }
+    .bar { height: 6px; border-radius: 3px; background: #eaecf0; overflow: hidden; position: relative; }
+    .bar > span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--accent); }
+    .bar > span.ok { background: #12b76a; } .bar > span.warn { background: #f79009; } .bar > span.bad { background: #f04438; } .bar > span.ghost { background: #c7d7fe; }
+    .safe-bottom { padding-bottom: calc(env(safe-area-inset-bottom) + .25rem); }
   </style>
   {% block head %}{% endblock %}
 </head>
-<body class="{% block body_class %}bg-zinc-50 text-zinc-900{% endblock %}">
-  {% set path = request.url.path if request else "/" %}
-  <header class="border-b border-zinc-200 bg-white" style="padding-top:env(safe-area-inset-top)">
-    <nav class="max-w-6xl mx-auto px-4 h-14 flex items-center gap-4 lg:gap-6 text-sm whitespace-nowrap overflow-x-auto">
-      <a href="/" class="font-semibold tracking-tight flex items-center gap-2 mr-2"><img src="/static/icon-180.png" alt="" class="w-6 h-6 rounded-md">Northstar</a>
-      <a href="/" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Overview</a>
-      <a href="/plan" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Plan</a>
-      <a href="/transactions" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Transactions</a>
-      <a href="/goals" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Goals</a>
-      <a href="/retirement" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Retirement</a>
-      <a href="/runs" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Questions</a>
-      <a href="/rules" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Rules</a>
-      <a href="/privacy" class="hidden sm:inline text-zinc-600 hover:text-zinc-900 ml-auto">Privacy</a>
-      <a href="/connect" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Accounts</a>
-      <a href="/privacy" class="sm:hidden ml-auto text-zinc-500 text-sm">Settings</a>
+{% set path = request.url.path if request else "/" %}
+{% set nav = [
+  ("Money", [("/", "Overview", "M3 11.5 12 4l9 7.5M5.5 10v9.5h13V10"), ("/transactions", "Transactions", "M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"), ("/connect", "Accounts", "M3 10h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20.5h18M12 3.5l9 4.5H3z")]),
+  ("Planning", [("/plan", "Plan", "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01"), ("/goals", "Goals", "M5 21V4m0 0h11.5l-2.2 4.2 2.2 4.3H5"), ("/retirement", "Retirement", "M3 17l6-6 4 4 8-8M15 7h6v6")]),
+  ("Assistant", [("/runs", "Questions", "M20.5 12a8.5 8.5 0 0 1-12.4 7.5L3.5 20.5l1-4.4A8.5 8.5 0 1 1 20.5 12z"), ("/rules", "Rules", "M4 5h16l-6.2 7.2V18l-3.6 2v-7.8z")]),
+] %}
+{% macro icon(d, size=18) %}<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ d }}"/></svg>{% endmacro %}
+{% set on = path if path in ["/", "/transactions", "/connect", "/plan", "/goals", "/retirement", "/runs", "/rules", "/privacy"] else ("/runs" if path.startswith("/runs") else path) %}
+<body>
+  {% if not hide_nav %}
+  <aside class="sidebar hidden md:flex">
+    <a href="/" class="flex items-center gap-2.5 px-5 h-14 border-b border-[var(--line-soft)] font-semibold text-[15px]"><img src="/static/icon-180.png" alt="" class="w-7 h-7 rounded-md">Northstar</a>
+    <nav class="flex-1 overflow-y-auto pb-4">
+      {% for group, items in nav %}
+        <div class="nav-group"><div class="nav-label">{{ group }}</div>
+          {% for href, label, d in items %}<a href="{{ href }}" class="nav-item {{ 'on' if on == href }}" {% if on == href %}aria-current="page"{% endif %}>{{ icon(d) }}{{ label }}</a>{% endfor %}
+        </div>
+      {% endfor %}
     </nav>
-  </header>
-  {% if status and status.message %}<div class="max-w-6xl mx-auto px-4 pt-4">{% include "_status.html" %}</div>{% endif %}
-  <main class="max-w-6xl mx-auto px-4 py-5 pb-28 sm:pb-6">{% block content %}{% endblock %}</main>
+    <div class="p-3 border-t border-[var(--line-soft)]">
+      <a href="/privacy" class="nav-item {{ 'on' if on == '/privacy' }}">{{ icon("M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z") }}Privacy &amp; security</a>
+    </div>
+  </aside>
 
-  <nav class="sm:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-zinc-200 safe-bottom z-40">
+  <header class="md:hidden sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-[var(--line)]" style="padding-top: env(safe-area-inset-top)">
+    <div class="h-12 px-4 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2 font-semibold"><img src="/static/icon-180.png" alt="" class="w-6 h-6 rounded-md">Northstar</a>
+      <details class="relative">
+        <summary class="btn btn-ghost btn-sm" aria-label="All pages">{{ icon("M4 7h16M4 12h16M4 17h16", 20) }}</summary>
+        <div class="absolute right-0 mt-2 w-56 panel p-1.5 shadow-lg">
+          {% for group, items in nav %}{% for href, label, d in items %}<a href="{{ href }}" class="nav-item {{ 'on' if on == href }}">{{ icon(d) }}{{ label }}</a>{% endfor %}{% endfor %}
+          <a href="/privacy" class="nav-item {{ 'on' if on == '/privacy' }}">{{ icon("M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z") }}Privacy &amp; security</a>
+        </div>
+      </details>
+    </div>
+  </header>
+  {% endif %}
+
+  <div class="{{ 'md:pl-[232px]' if not hide_nav }}">
+    {% if status and status.message %}<div class="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 pt-4">{% include "_status.html" %}</div>{% endif %}
+    <main class="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 pt-5 sm:pt-7 pb-28 md:pb-10">{% block content %}{% endblock %}</main>
+  </div>
+
+  {% if not hide_nav %}
+  <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-[var(--line)] safe-bottom z-40">
     <div class="grid grid-cols-5 text-[11px] text-center">
-      {% for href, label, icon in [("/", "Overview", "M3 12l9-8 9 8M5 10v10h14V10"), ("/plan", "Plan", "M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z"), ("/transactions", "Activity", "M4 6h16M4 12h16M4 18h10"),
-                                   ("/runs", "Ask", "M8 10h8M8 14h5M21 12a9 9 0 1 1-4-7.5L21 3v6h-6"), ("/connect", "Accounts", "M3 10h18M5 10V20h14V10M12 3l9 5H3z")] %}
-        <a href="{{ href }}" class="flex flex-col items-center gap-0.5 pt-2 pb-1 {{ 'text-zinc-900 font-medium' if path == href else 'text-zinc-500' }}">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{ icon }}"/></svg>{{ label }}</a>
+      {% for href, label, d in [nav[0][1][0], nav[1][1][0], nav[1][1][1], ("/transactions", "Activity", nav[0][1][1][2]), nav[0][1][2]] %}
+        <a href="{{ href }}" class="flex flex-col items-center gap-0.5 pt-2 pb-1 {{ 'text-[var(--accent)] font-medium' if on == href else 'text-[var(--ink-3)]' }}">{{ icon(d, 22) }}{{ label }}</a>
       {% endfor %}
     </div>
   </nav>
+  {% endif %}
 
   <script>
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
     if (window.LEDGER_OFFLINE) {
       document.querySelectorAll("form button, form input, form select, form textarea, [hx-post]").forEach(el => el.disabled = true);
       document.querySelectorAll("[hx-get][hx-trigger*=every]").forEach(el => el.removeAttribute("hx-trigger"));
+    }
+    if (window.Chart) {
+      Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+      Chart.defaults.font.size = 12; Chart.defaults.color = "#667085"; Chart.defaults.borderColor = "#eef0f3";
     }
   </script>
 </body>

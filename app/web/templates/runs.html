@@ -1,14 +1,19 @@
 {% extends "base.html" %}
+{% from "_ui.html" import page_header, badge %}
+{% block title %}Questions · Northstar{% endblock %}
 {% block content %}
-<h1 class="text-xl font-semibold mb-3">Questions</h1>
-<div class="card p-4 mb-4">{% include "_ask.html" %}</div>
-<div class="card overflow-hidden"><table class="w-full text-sm">
-  <thead class="bg-zinc-50 text-zinc-500 text-left"><tr><th class="px-3 py-2">Question</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Verified</th><th class="px-3 py-2 text-right">Steps</th><th class="px-3 py-2 text-right">Cost</th></tr></thead>
-  <tbody>{% for r in runs %}
-    <tr class="border-t border-zinc-100 hover:bg-zinc-50 cursor-pointer" onclick="location.href='/runs/{{ r.id }}'">
-      <td class="px-3 py-2">{{ r.question }}</td><td class="px-3 py-2">{{ r.status }}</td>
-      <td class="px-3 py-2">{{ "✓" if r.verified else ("—" if r.status != "done" else "⚠") }}</td>
-      <td class="px-3 py-2 text-right">{{ r.turns }}</td><td class="px-3 py-2 text-right num">${{ "%.3f"|format(r.cost_usd) }}</td></tr>
-  {% else %}<tr><td colspan="5" class="px-3 py-8 text-center text-zinc-500">No questions yet.</td></tr>{% endfor %}</tbody>
-</table></div>
+{% call page_header("Questions", "Every answer is checked against queries on your own data.") %}{% endcall %}
+<section class="panel mb-5"><div class="panel-b">{% include "_ask.html" %}</div></section>
+<section class="panel">
+  <div class="panel-h"><h2>History</h2><span class="meta">{{ runs|length }} questions</span></div>
+  <table class="tbl">
+    <thead><tr><th>Question</th><th>Status</th><th class="hidden sm:table-cell r">Steps</th><th class="hidden sm:table-cell r">Cost</th></tr></thead>
+    <tbody>{% for r in runs %}
+      <tr class="click" onclick="location.href='/runs/{{ r.id }}'">
+        <td><a href="/runs/{{ r.id }}" class="font-medium">{{ r.question }}</a></td>
+        <td>{% if r.status == "running" %}{{ badge("Running", "info") }}{% elif r.status != "done" %}{{ badge(r.status|capitalize, "bad") }}{% elif r.verified %}{{ badge("Verified", "ok") }}{% else %}{{ badge("Unverified", "warn") }}{% endif %}</td>
+        <td class="hidden sm:table-cell r">{{ r.turns }}</td><td class="hidden sm:table-cell r c-muted">${{ "%.3f"|format(r.cost_usd) }}</td></tr>
+    {% else %}<tr><td colspan="4" class="text-center c-muted py-8">No questions yet.</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
 {% endblock %}

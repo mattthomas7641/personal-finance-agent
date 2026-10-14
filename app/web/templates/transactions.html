@@ -1,34 +1,38 @@
 {% extends "base.html" %}
+{% from "_ui.html" import page_header, badge %}
+{% block title %}Transactions · Northstar{% endblock %}
 {% block content %}
-<h1 class="text-xl font-semibold mb-3">Transactions</h1>
-<form method="get" class="flex flex-wrap gap-2 mb-3 text-sm">
-  <select name="month" class="field !w-auto" onchange="this.form.submit()"><option value="">All months</option>
-    {% for m in months %}<option {% if m == f.month %}selected{% endif %}>{{ m }}</option>{% endfor %}</select>
-  <select name="category" class="field !w-auto" onchange="this.form.submit()"><option value="">All categories</option>
-    {% for c in categories + ["Uncategorized"] %}<option {% if c == f.category %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
-  <select name="source" class="field !w-auto" onchange="this.form.submit()"><option value="">Categorized by: any</option>
-    {% for s in ["user", "rule", "memory", "plaid", "llm"] %}<option {% if s == f.source %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
-  <input name="q" value="{{ f.q }}" placeholder="Search merchant or description" class="field sm:!w-64">
-  <span class="sm:ml-auto self-center text-zinc-500">{{ rows|length }} shown · spending {{ total|money }}</span>
-</form>
-<p class="text-xs text-zinc-500 mb-2">Change a category and every transaction with the same description is fixed, and a rule is saved so it never needs fixing again.</p>
-<div class="card overflow-hidden">
-<table class="w-full text-sm">
-  <thead class="bg-zinc-50 text-zinc-500 text-left"><tr><th class="px-3 py-2">Date</th><th class="px-3 py-2">Merchant</th><th class="px-3 py-2 hidden sm:table-cell">Account</th><th class="px-3 py-2">Category</th><th class="px-3 py-2 text-right">Amount</th></tr></thead>
-  <tbody>
-  {% for t, acct in rows %}
-    <tr class="border-t border-zinc-100">
-      <td class="px-3 py-1.5 text-zinc-500 whitespace-nowrap text-xs sm:text-sm">{{ t.date.strftime("%b %d") }}<span class="hidden sm:inline">, {{ t.date.year }}</span>{% if t.pending %} <span class="pill">pending</span>{% endif %}</td>
-      <td class="px-3 py-1.5"><div>{{ t.merchant or t.raw_name }}</div><div class="text-xs text-zinc-400 mono hidden sm:block">{{ t.raw_name }}</div></td>
-      <td class="px-3 py-1.5 text-zinc-500 hidden sm:table-cell">{{ acct or "" }}</td>
-      <td class="px-3 py-1.5">
-        <select name="category" class="field !w-auto !py-1 text-xs" hx-post="/txn/{{ t.id }}/category" hx-trigger="change" hx-target="next span">
-          {% if not t.category %}<option value="">—</option>{% endif %}
-          {% for c in categories %}<option {% if c == t.category %}selected{% endif %}>{{ c }}</option>{% endfor %}
-        </select> <span class="text-xs text-zinc-400 hidden sm:inline">{{ t.category_source }}</span></td>
-      <td class="px-3 py-1.5 text-right num {{ 'text-emerald-700' if t.amount < 0 }}">{{ (-t.amount)|money if t.amount < 0 else t.amount|money }}{% if t.amount < 0 %} in{% endif %}</td>
-    </tr>
-  {% else %}<tr><td colspan="5" class="px-3 py-10 text-center text-zinc-500">No transactions match.</td></tr>{% endfor %}
-  </tbody>
-</table></div>
+{% call page_header("Transactions", "Change a category and every matching transaction is fixed, with a rule saved for next time.") %}{% endcall %}
+<section class="panel">
+  <form method="get" class="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-[var(--line-soft)]">
+    <input name="q" value="{{ f.q }}" placeholder="Search merchant or description" class="field sm:!w-64" aria-label="Search">
+    <select name="month" class="field !w-auto" aria-label="Month" onchange="this.form.submit()"><option value="">All months</option>
+      {% for m in months %}<option {% if m == f.month %}selected{% endif %}>{{ m }}</option>{% endfor %}</select>
+    <select name="category" class="field !w-auto" aria-label="Category" onchange="this.form.submit()"><option value="">All categories</option>
+      {% for c in categories + ["Uncategorized"] %}<option {% if c == f.category %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+    <select name="source" class="field !w-auto" aria-label="Categorized by" onchange="this.form.submit()"><option value="">Any source</option>
+      {% for s in ["user", "rule", "memory", "plaid", "llm"] %}<option value="{{ s }}" {% if s == f.source %}selected{% endif %}>{{ {"user": "You", "rule": "Rule", "memory": "Memory", "plaid": "Plaid", "llm": "AI"}[s] }}</option>{% endfor %}</select>
+    <span class="sm:ml-auto hint">{{ rows|length }} shown · {{ total|money }} spent</span>
+  </form>
+  <div class="overflow-x-auto">
+  <table class="tbl">
+    <thead><tr><th>Date</th><th>Merchant</th><th class="hidden md:table-cell">Account</th><th>Category</th><th class="r">Amount</th></tr></thead>
+    <tbody>
+    {% for t, acct in rows %}
+      <tr>
+        <td class="whitespace-nowrap c-muted text-[13px]">{{ t.date.strftime("%b %d") }}<span class="hidden sm:inline">, {{ t.date.year }}</span>{% if t.pending %} {{ badge("Pending", "info", true) }}{% endif %}</td>
+        <td><div class="font-medium">{{ t.merchant or t.raw_name }}</div><div class="text-[12px] c-muted mono hidden sm:block truncate max-w-[22rem]">{{ t.raw_name }}</div></td>
+        <td class="hidden md:table-cell c-muted text-[13px]">{{ acct or "" }}</td>
+        <td class="whitespace-nowrap">
+          <select name="category" class="field !w-auto !h-8 text-[13px]" aria-label="Category" hx-post="/txn/{{ t.id }}/category" hx-trigger="change" hx-target="next span">
+            {% if not t.category %}<option value="">—</option>{% endif %}
+            {% for c in categories %}<option {% if c == t.category %}selected{% endif %}>{{ c }}</option>{% endfor %}
+          </select> <span class="text-[12px] c-muted hidden lg:inline">{{ t.category_source }}</span></td>
+        <td class="r whitespace-nowrap {{ 'c-ok' if t.amount < 0 }}">{{ ("+" ~ ((-t.amount)|money)) if t.amount < 0 else t.amount|money }}</td>
+      </tr>
+    {% else %}<tr><td colspan="5" class="text-center c-muted py-10">No transactions match these filters.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
 {% endblock %}

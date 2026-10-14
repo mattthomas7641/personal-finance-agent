@@ -1,4 +1,4 @@
-<div class="text-sm rounded-lg px-3 py-2 {{ 'bg-blue-50 text-blue-800' if status.busy else 'bg-zinc-100 text-zinc-700' }}"
+<div class="alert {{ 't-info' if status.busy else 't-muted bg-white border-[var(--line)]' }}"
      {% if status.busy %}hx-get="/status" hx-trigger="every 1.5s" hx-swap="outerHTML"{% endif %}>
-  {% if status.busy %}<span class="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse mr-1"></span>{% endif %}{{ status.message }}
+  {% if status.busy %}<span class="inline-block w-2 h-2 mt-1.5 rounded-full bg-[var(--info)] animate-pulse"></span>{% endif %}<div>{{ status.message }}</div>
 </div>
