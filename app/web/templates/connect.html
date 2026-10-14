@@ -1,105 +1,101 @@
 {% extends "base.html" %}
+{% from "_ui.html" import page_header, badge, alert, icon, I %}
+{% block title %}Accounts · Northstar{% endblock %}
 {% block content %}
-<h1 class="text-xl font-semibold mb-1">Accounts</h1>
-<p class="text-sm text-zinc-600 mb-4">Everything stays on this computer in <span class="mono">data/ledger.db</span>. Bank logins happen inside Plaid's own window; this app never sees your bank password, and the Plaid access token is never shown to the AI. Read the <a class="underline" href="https://mattthomas7641.github.io/northstar/privacy.html" target="_blank" rel="noopener">privacy policy</a>.</p>
-{% if error %}<div class="mb-4 text-sm text-red-800 bg-red-50 rounded-lg p-3">{{ error }}</div>{% endif %}
-{% if not has_anthropic %}<div class="mb-4 text-sm text-amber-800 bg-amber-50 rounded-lg p-3">No <span class="mono">ANTHROPIC_API_KEY</span> in <span class="mono">.env</span>. Importing works, but AI categorization and questions won't until you add one.</div>{% endif %}
+{% call page_header("Accounts", "Bank connections, manual accounts and imports. Everything is stored on this computer.") %}
+  {% if items %}<form method="post" action="/connect/sync"><button class="btn">{{ icon(I.sync) }}Sync now</button></form>{% endif %}
+  {% if plaid_ready %}<button id="link" class="btn btn-primary">{{ icon(I.plus) }}Connect {{ "a bank" if plaid_env != "sandbox" else "sandbox bank" }}</button>{% endif %}
+{% endcall %}
+{% if error %}{% call alert("bad", "mb-4") %}{{ error }}{% endcall %}{% endif %}
+{% if not has_anthropic %}{% call alert("warn", "mb-4") %}No <span class="mono">ANTHROPIC_API_KEY</span> in <span class="mono">.env</span>. Importing works, but AI categorization and questions won't until you add one.{% endcall %}{% endif %}
 
-<div id="manual" class="card p-5 mb-4">
-  <h2 class="font-semibold mb-1">Accounts without a bank connection</h2>
-  <p class="text-sm text-zinc-600 mb-3">For accounts Plaid can't reach, like a high-yield savings account. Update the balance whenever you check it. If you move money there from a connected account, add the text that shows up in those transfers and Northstar works out your monthly deposits.</p>
-  {% for a in cash.accounts %}
-    <form method="post" action="/accounts/manual/{{ a.id }}" class="border-t border-zinc-100 py-3 text-sm">
-      <div class="flex flex-wrap items-baseline gap-2 mb-2">
-        <span class="font-medium flex-1">{{ a.name }} <span class="pill">{{ a.kind }}</span>
-          <span class="text-xs {{ 'text-amber-600' if a.stale else 'text-zinc-400' }}">· updated {{ a.as_of }}{% if a.stale %} · update me{% endif %}</span></span>
-        <span class="text-xs text-zinc-500">{% if a.apy_pct %}{{ a.apy_pct }}% APY ≈ {{ a.interest_month|money }}/mo, {{ a.interest_year|money }}/yr{% endif %}
-          {% if a.detect_pattern %} · deposits ≈ {{ a.monthly_deposits|money }}/mo ({{ a.deposit_transactions }} transfers, last 3 months){% endif %}</span>
-      </div>
-      <div class="flex flex-wrap items-end gap-2">
-        <label class="w-32">Balance<input name="balance" class="field mt-1" inputmode="decimal" value="{{ "%.2f"|format(a.balance) }}"></label>
-        <label class="w-24">APY %<input name="apy_pct" class="field mt-1" inputmode="decimal" value="{{ a.apy_pct }}"></label>
-        <label class="flex-1 min-w-[10rem]">Transfers show as<input name="detect_pattern" class="field mt-1" placeholder="e.g. MARCUS or ALLY BANK" value="{{ a.detect_pattern }}"></label>
-        <button class="btn">Update</button><button name="delete" value="1" class="text-xs text-zinc-400 underline" onclick="return confirm('Remove {{ a.name|e }}?')">remove</button>
-      </div>
-    </form>
-  {% endfor %}
-  <form method="post" action="/accounts/manual" class="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end text-sm {{ 'border-t border-zinc-100 pt-3' if cash.accounts }}">
-    <label class="col-span-2 sm:col-span-1">Name<input name="name" required class="field mt-1" placeholder="Marcus HYSA"></label>
-    <label>Type<select name="kind" class="field mt-1">{% for v, l in [("savings", "Savings / HYSA"), ("checking", "Checking"), ("cd", "CD"), ("cash", "Cash"), ("other", "Other")] %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></label>
-    <label>Balance<input name="balance" required class="field mt-1" inputmode="decimal"></label>
-    <label>APY % <span class="text-zinc-400">optional</span><input name="apy_pct" class="field mt-1" inputmode="decimal" placeholder="4.10"></label>
-    <label class="col-span-2 sm:col-span-1">Transfers show as <span class="text-zinc-400">optional</span><input name="detect_pattern" class="field mt-1" placeholder="MARCUS"></label>
-    <button class="btn btn-primary col-span-2 sm:col-span-5">Add account</button>
+<section id="banks" class="panel mb-5 scroll-mt-20">
+  <div class="panel-h"><h2>Bank connections</h2><span class="meta">Plaid {{ plaid_env }}{% if plaid_env == "production" %} · about $0.30 per bank a month{% endif %}</span></div>
+  {% if not plaid_ready %}
+    <div class="panel-b text-[13px] c-muted">Add <span class="mono">PLAID_CLIENT_ID</span> and <span class="mono">PLAID_SECRET</span> to <span class="mono">.env</span> (Plaid dashboard, Developers, Keys), then restart.</div>
+  {% else %}
+    <table class="tbl">
+      <thead><tr><th>Institution</th><th>Status</th><th class="hidden sm:table-cell">Last synced</th><th></th></tr></thead>
+      <tbody>
+      {% for it in items %}
+        <tr>
+          <td><span class="font-medium">{{ it.institution or "Bank" }}</span>{% if it.error_message and it.status != "ok" %}<div class="text-[12px] c-muted">{{ it.error_message }}</div>{% endif %}</td>
+          <td>{% if it.status == "ok" %}{{ badge("Syncing", "ok") }}{% elif it.status == "expiring" %}{{ badge("Expires " ~ (it.consent_expires.strftime("%b %d") if it.consent_expires else "soon"), "warn") }}{% elif it.status == "login_required" %}{{ badge("Needs login", "bad") }}{% else %}{{ badge("Error", "bad") }}{% endif %}</td>
+          <td class="hidden sm:table-cell c-muted text-[13px]">{{ it.last_synced.strftime("%b %d, %H:%M") if it.last_synced else "Never" }}</td>
+          <td class="r"><div class="inline-flex flex-wrap justify-end items-center gap-2">
+            {% if it.status != "ok" %}<button type="button" class="btn btn-sm btn-primary" onclick="reconnect('{{ it.id }}')">Reconnect</button>{% endif %}
+            <form method="post" action="/connect/{{ it.id }}/disconnect" class="inline-flex items-center gap-2" onsubmit="return confirm('Disconnect {{ (it.institution or 'this bank')|e }}? Plaid will stop syncing it.')">
+              <label class="text-[12px] c-muted hidden sm:flex items-center gap-1"><input type="checkbox" name="keep_history" value="1" checked> Keep history</label>
+              <button class="btn btn-sm btn-danger">Disconnect</button></form></div></td>
+        </tr>
+      {% else %}<tr><td colspan="4" class="c-muted">No banks connected yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    <div class="panel-f">Connected banks sync every 6 hours while the app is running. Disconnecting tells Plaid to stop access and deletes the stored token.
+      {% if plaid_env == "sandbox" %}<form method="post" action="/connect/sandbox" class="inline"><button class="link">Add a sandbox test bank</button></form>{% endif %}</div>
+  {% endif %}
+</section>
+
+<section id="manual" class="panel mb-5 scroll-mt-20">
+  <div class="panel-h"><h2>Accounts without a bank connection</h2><span class="meta">{{ cash.accounts|length }} accounts</span></div>
+  <p class="px-4 pt-3 hint max-w-[80ch]">For accounts Plaid can't reach, like a high-yield savings account. Update the balance when you check it. Add the text that shows up in transfers to it and Northstar works out your monthly deposits.</p>
+  <table class="tbl mt-2">
+    <thead><tr><th>Account</th><th class="r">Balance</th><th class="r hidden sm:table-cell">APY %</th><th class="hidden md:table-cell">Transfers show as</th><th></th></tr></thead>
+    <tbody>
+    {% for a in cash.accounts %}
+      <tr>
+        <td><span class="font-medium">{{ a.name }}</span>{% if a.stale %} {{ badge("Update", "warn") }}{% endif %}
+          <div class="text-[12px] c-muted">Updated {{ a.as_of }}{% if a.apy_pct %} · about {{ a.interest_year|money0 }}/yr interest{% endif %}{% if a.detect_pattern %} · deposits about {{ a.monthly_deposits|money0 }}/mo{% endif %}</div></td>
+        <td class="r"><input form="cash-{{ a.id }}" name="balance" class="field !w-28 !h-8 text-right" inputmode="decimal" value="{{ "%.2f"|format(a.balance) }}" aria-label="Balance"></td>
+        <td class="r hidden sm:table-cell"><input form="cash-{{ a.id }}" name="apy_pct" class="field !w-20 !h-8 text-right" inputmode="decimal" value="{{ a.apy_pct }}" aria-label="APY"></td>
+        <td class="hidden md:table-cell"><input form="cash-{{ a.id }}" name="detect_pattern" class="field !h-8" placeholder="MARCUS" value="{{ a.detect_pattern }}" aria-label="Transfers show as"></td>
+        <td class="r whitespace-nowrap"><form id="cash-{{ a.id }}" method="post" action="/accounts/manual/{{ a.id }}" class="inline-flex gap-1">
+          <button class="btn btn-sm">Save</button><button name="delete" value="1" class="btn btn-sm btn-ghost btn-danger" onclick="return confirm('Remove {{ a.name|e }}?')">Remove</button></form></td>
+      </tr>
+    {% else %}<tr><td colspan="5" class="c-muted">None yet.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <form method="post" action="/accounts/manual" class="grid grid-cols-2 sm:grid-cols-5 gap-3 items-end px-4 py-4 border-t border-[var(--line-soft)]">
+    <label class="lbl col-span-2 sm:col-span-1">Name<input name="name" required class="field" placeholder="Marcus HYSA"></label>
+    <label class="lbl">Type<select name="kind" class="field">{% for v, l in [("savings", "Savings / HYSA"), ("checking", "Checking"), ("cd", "CD"), ("cash", "Cash"), ("other", "Other")] %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></label>
+    <label class="lbl">Balance<input name="balance" required class="field" inputmode="decimal"></label>
+    <label class="lbl">APY % <span class="font-normal c-muted">(optional)</span><input name="apy_pct" class="field" inputmode="decimal" placeholder="4.10"></label>
+    <label class="lbl col-span-2 sm:col-span-1">Transfers show as <span class="font-normal c-muted">(optional)</span><input name="detect_pattern" class="field" placeholder="MARCUS"></label>
+    <div class="col-span-2 sm:col-span-5"><button class="btn btn-primary">{{ icon(I.plus) }}Add account</button></div>
   </form>
-</div>
+</section>
 
-<div class="grid md:grid-cols-2 gap-4">
-  <div class="card p-5 space-y-3">
-    <h2 class="font-semibold">Connect a bank with Plaid <span class="pill">{{ plaid_env }}</span></h2>
-    {% if not plaid_ready %}
-      <p class="text-sm text-zinc-600">Add <span class="mono">PLAID_CLIENT_ID</span> and <span class="mono">PLAID_SECRET</span> to <span class="mono">.env</span> (Plaid dashboard → Developers → Keys), then restart.</p>
-    {% else %}
-      {% if plaid_env == "sandbox" %}
-        <p class="text-sm text-zinc-600">Sandbox mode: fake banks with realistic data. Set <span class="mono">PLAID_ENV=production</span> (needs Plaid Production or trial access) to connect your real accounts.</p>
-        <form method="post" action="/connect/sandbox"><button class="btn btn-primary">Add a sandbox test bank</button></form>
-      {% endif %}
-      <button id="link" class="btn {{ 'btn-primary' if plaid_env != 'sandbox' }}">Connect {{ "a real" if plaid_env != "sandbox" else "via Plaid Link (sandbox)" }} bank</button>
-      {% if items %}<form method="post" action="/connect/sync"><button class="btn">Sync now</button></form>{% endif %}
-      <p class="text-xs text-zinc-500">Connected banks sync automatically every 6 hours while the app is running.</p>
-    {% endif %}
-  </div>
-
-  <form method="post" action="/connect/csv" enctype="multipart/form-data" class="card p-5 space-y-3">
-    <h2 class="font-semibold">Import a CSV export</h2>
-    <p class="text-sm text-zinc-600">Works with any bank or card: download "Activity" as CSV. Re-importing the same file won't duplicate rows.</p>
-    <input type="file" name="file" accept=".csv" required class="text-sm">
-    <input name="account" required class="field" placeholder="Account name, e.g. Chase Sapphire">
-    <select name="sign" class="field"><option value="auto">Detect whether purchases are negative or positive</option>
-      <option value="negative">Purchases are negative numbers</option><option value="positive">Purchases are positive numbers</option></select>
-    <button class="btn btn-primary">Import</button>
-  </form>
-</div>
-
-{% if items %}
-<div id="banks" class="card p-5 mt-4">
-  <h2 class="font-semibold mb-1">Connected banks</h2>
-  <p class="text-sm text-zinc-600 mb-3">Each bank login is one Plaid "Item"{% if plaid_env == "production" %} (billed about $0.30/month){% endif %}. Disconnecting tells Plaid to stop access, which ends the charge, and deletes the stored token.</p>
-  {% for it in items %}
-    <div class="border-t border-zinc-100 py-3">
-      <div class="flex flex-wrap items-center gap-2">
-        <span class="text-sm font-medium flex-1">{{ it.institution or "Bank" }} <span class="pill">{{ it.env }}</span>
-          {% if it.status == "ok" %}<span class="pill !bg-emerald-100 !text-emerald-800">syncing</span>
-          {% elif it.status == "expiring" %}<span class="pill !bg-amber-100 !text-amber-800">expires {{ it.consent_expires.strftime("%b %d") if it.consent_expires else "soon" }}</span>
-          {% elif it.status == "login_required" %}<span class="pill !bg-red-100 !text-red-800">needs login</span>
-          {% else %}<span class="pill !bg-red-100 !text-red-800">error</span>{% endif %}
-          <span class="text-zinc-400 font-normal text-xs">· last synced {{ it.last_synced.strftime("%b %d, %H:%M") if it.last_synced else "never" }}</span></span>
-        {% if it.status != "ok" %}<button type="button" class="btn btn-primary" onclick="reconnect('{{ it.id }}')">Reconnect</button>{% endif %}
-        <form method="post" action="/connect/{{ it.id }}/disconnect" class="flex items-center gap-2"
-              onsubmit="return confirm('Disconnect {{ (it.institution or 'this bank')|e }}? Plaid will stop syncing it.')">
-          <label class="text-xs text-zinc-600 flex items-center gap-1"><input type="checkbox" name="keep_history" value="1" checked> keep history</label>
-          <button class="btn">Disconnect</button>
-        </form>
-      </div>
-      {% if it.error_message and it.status != "ok" %}<p class="text-xs text-zinc-500 mt-1">{{ it.error_message }}</p>{% endif %}
+<div class="grid lg:grid-cols-2 gap-5">
+  <section class="panel min-w-0">
+    <div class="panel-h"><h2>All accounts</h2><span class="meta">{{ accounts|length }} accounts</span></div>
+    <table class="tbl">
+      <thead><tr><th>Account</th><th class="hidden sm:table-cell">Source</th><th class="r">Transactions</th></tr></thead>
+      <tbody>
+      {% for a in accounts %}<tr><td><span class="font-medium">{{ a.name }}</span>{% if a.mask %} <span class="c-muted">••{{ a.mask }}</span>{% endif %}<div class="text-[12px] c-muted">{{ a.type }}</div></td>
+        <td class="hidden sm:table-cell">{{ badge(a.source|capitalize, "muted", true) }}</td><td class="r">{{ counts.get(a.id, 0) }}</td></tr>
+      {% else %}<tr><td colspan="3" class="c-muted">No accounts yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    <div class="panel-f flex flex-wrap gap-2">
+      <form method="post" action="/connect/categorize"><button class="btn btn-sm">Categorize uncategorized</button></form>
+      <form method="post" action="/connect/demo"><button class="btn btn-sm btn-ghost">Load demo data</button></form>
+      {% if accounts|selectattr("source", "equalto", "demo")|list %}<form method="post" action="/connect/remove_demo"><button class="btn btn-sm btn-ghost">Remove demo data</button></form>{% endif %}
     </div>
-  {% endfor %}
-</div>
-{% endif %}
+  </section>
 
-<div class="card p-5 mt-4">
-  <h2 class="font-semibold mb-2">Accounts</h2>
-  <table class="w-full text-sm"><tbody>
-  {% for a in accounts %}<tr class="border-t border-zinc-100"><td class="py-1.5">{{ a.name }}{% if a.mask %} ••{{ a.mask }}{% endif %}</td>
-    <td class="text-zinc-500">{{ a.type }}</td><td><span class="pill">{{ a.source }}</span></td><td class="text-right num">{{ counts.get(a.id, 0) }} transactions</td></tr>
-  {% else %}<tr><td class="text-zinc-500 py-2">No accounts yet.</td></tr>{% endfor %}
-  </tbody></table>
-  <div class="flex gap-2 mt-3">
-    <form method="post" action="/connect/demo"><button class="btn">Load demo data</button></form>
-    {% if accounts|selectattr("source", "equalto", "demo")|list %}<form method="post" action="/connect/remove_demo"><button class="btn">Remove demo data</button></form>{% endif %}
-    <form method="post" action="/connect/categorize"><button class="btn">Categorize uncategorized</button></form>
-  </div>
+  <form method="post" action="/connect/csv" enctype="multipart/form-data" class="panel min-w-0">
+    <div class="panel-h"><h2>Import a CSV</h2></div>
+    <div class="panel-b space-y-3">
+      <p class="hint">Works with any bank or card: download your activity as CSV. Re-importing the same file won't duplicate rows.</p>
+      <label class="lbl">File<input type="file" name="file" accept=".csv" required class="field"></label>
+      <label class="lbl">Account name<input name="account" required class="field" placeholder="Chase Sapphire"></label>
+      <label class="lbl">Amount signs<select name="sign" class="field"><option value="auto">Detect automatically</option>
+        <option value="negative">Purchases are negative</option><option value="positive">Purchases are positive</option></select></label>
+      <button class="btn btn-primary">{{ icon(I.upload) }}Import</button>
+    </div>
+  </form>
 </div>
+<p class="hint mt-4">Bank logins happen inside Plaid's own window. Northstar never sees your bank password, and the Plaid access token is never shown to the AI. <a class="link" href="https://mattthomas7641.github.io/northstar/privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>
 
 <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
 <script>

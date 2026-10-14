@@ -273,3 +273,70 @@ def plan(today: date | None = None) -> dict | None:
         "net_worth": nw, "subscriptions": subscriptions(today), "cash_flow": cf, "harsh": rp.harsh,
         "emergency_fund_target": round(spending * 6, 0),
     }
+
+
+def _m(v: float) -> str:
+    return f"${v:,.0f}"
+
+
+def goal_register(ov: dict, fp: dict | None) -> list[dict]:
+    """Every goal in one list: the retirement target, Coast FIRE, Roth IRA, 401(k), then savings goals.
+
+    ov is planning.overview(), fp is plan(). Each row: name, target, current, progress_pct, takes (what it needs),
+    status, tone (ok / warn / bad / info / muted), href.
+    """
+    rows = []
+    if fp and not fp.get("needs") and fp["targets"]:
+        t0, tl = fp["targets"][0], fp["targets"][-1]
+        tone = {"Realistic": "ok", "Aggressive": "warn"}.get(t0["rating"], "bad")
+        target = _m(t0["target"]) + (f"–{_m(tl['target'])}" if tl is not t0 else "")
+        rows.append({"name": f"Retire at {fp['target_age']}", "detail": f"{target} invested", "target": t0["target"],
+                     "current": fp["invested"], "progress_pct": min(100, round(fp["invested"] / t0["target"] * 100, 1)),
+                     "takes": f"{_m(t0['required_monthly'])}/mo invested ({_m(t0['extra_monthly'])} more than now)",
+                     "status": t0["rating"].replace(" on current income", ""), "tone": tone, "href": "/plan"})
+    else:
+        rows.append({"name": "Retirement target", "detail": "Not set", "target": None, "current": None, "progress_pct": 0,
+                     "takes": "Add your birth year and target to see what it takes", "status": "Set up", "tone": "muted",
+                     "href": "/plan"})
+    r = ov.get("retirement")
+    if r and r["coast_number"]:
+        rows.append({"name": "Coast FIRE", "detail": f"Retire at {r['retirement_age']} with no new contributions",
+                     "target": r["coast_number"], "current": r["invested"], "progress_pct": r["coast_progress_pct"],
+                     "takes": "Reached" if r["coast_reached"] else (f"Reached around age {r['coast_age']} at your current pace"
+                                                                    if r["coast_age"] else "Not before retirement at this pace"),
+                     "status": "Reached" if r["coast_reached"] else ("On track" if r["coast_age"] else "Behind"),
+                     "tone": "ok" if r["coast_reached"] else ("info" if r["coast_age"] else "warn"), "href": "/retirement"})
+    roth = ov.get("roth")
+    if roth:
+        if roth["maxed"]:
+            takes, status, tone = "Nothing left to contribute this year", "Maxed", "ok"
+        elif roth["allowed"] <= 0:
+            takes, status, tone = "No direct contributions allowed at this income", "Not eligible", "muted"
+        else:
+            takes = f"{_m(roth['monthly_to_max_by_dec'])}/mo to max by Dec 31 ({_m(roth['remaining'])} left)"
+            status, tone = ("In progress", "info") if roth["contributed"] > 0 else ("Not started", "warn")
+        rows.append({"name": f"Roth IRA {roth['tax_year']}", "detail": "Max out this year's contribution", "target": roth["allowed"],
+                     "current": roth["contributed"],
+                     "progress_pct": min(100, round(roth["contributed"] / roth["allowed"] * 100, 1)) if roth["allowed"] else 0,
+                     "takes": takes, "status": status, "tone": tone, "href": "/retirement"})
+    k = ov.get("k401")
+    if k:
+        rows.append({"name": f"401(k) {k['year']}", "detail": "Max out this year's deferrals", "target": k["limit"],
+                     "current": k["ytd"], "progress_pct": min(100, round(k["ytd"] / k["limit"] * 100, 1)) if k["limit"] else 0,
+                     "takes": (f"Projected {_m(k['projected_year_end'])} at {k['current_pct']:g}%" if k["on_track_to_max"] else
+                               f"Raise to {k['required_pct']:g}% of pay ({_m(k['shortfall'])} short)" if k["required_pct"] is not None
+                               else f"{_m(k['shortfall'])} short; can't fully catch up this year"),
+                     "status": "On track" if k["on_track_to_max"] else "Behind", "tone": "ok" if k["on_track_to_max"] else "warn",
+                     "href": "/goals#k401"})
+    else:
+        rows.append({"name": "401(k)", "detail": "Not set up", "target": None, "current": None, "progress_pct": 0,
+                     "takes": "Enter your salary and contribution % from a pay stub", "status": "Set up", "tone": "muted",
+                     "href": "/goals#k401"})
+    for g in ov.get("goals", []):
+        rows.append({"name": g["name"], "detail": f"By {date.fromisoformat(g['target_date']).strftime('%b %Y')}", "target": g["target"],
+                     "current": g["current"], "progress_pct": g["progress_pct"],
+                     "takes": (f"{_m(g['monthly_now'])}/mo gets you there" if g["on_track"] else
+                               f"{_m(g['required_monthly'])}/mo needed, you add {_m(g['monthly_now'])}"),
+                     "status": "On track" if g["on_track"] else "Behind", "tone": "ok" if g["on_track"] else "warn",
+                     "href": f"/goals#goal-{g['id']}", "goal_id": g["id"]})
+    return rows

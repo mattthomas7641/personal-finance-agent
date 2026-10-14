@@ -1,14 +1,17 @@
 {% extends "base.html" %}
+{% set hide_nav = true %}
+{% block title %}Sign in · Northstar{% endblock %}
 {% block content %}
-<div class="max-w-sm mx-auto mt-10">
-  <div class="flex justify-center mb-4"><img src="/static/icon-180.png" class="w-16 h-16 rounded-2xl" alt=""></div>
-  <h1 class="text-xl font-semibold text-center mb-1">Northstar</h1>
-  <p class="text-sm text-zinc-500 text-center mb-5">Enter your passcode</p>
-  {% if error %}<div class="mb-3 text-sm text-red-800 bg-red-50 rounded-lg p-3 text-center">{{ error }}</div>{% endif %}
-  <form method="post" action="/login" class="space-y-3">
-    <input type="hidden" name="next" value="{{ next }}">
-    <input type="password" name="passcode" required autofocus autocomplete="current-password" class="field text-center" placeholder="Passcode">
-    <button class="btn btn-primary w-full">Unlock</button>
+<div class="max-w-sm mx-auto mt-[12vh]">
+  <div class="flex items-center gap-2.5 justify-center mb-6"><img src="/static/icon-180.png" class="w-9 h-9 rounded-lg" alt=""><span class="text-[18px] font-semibold">Northstar</span></div>
+  <form method="post" action="/login" class="panel">
+    <div class="panel-b space-y-3">
+      <div><h1 class="text-[16px] font-semibold">Sign in</h1><p class="hint">Enter the passcode you set on your Mac.</p></div>
+      {% if error %}<div class="alert t-bad">{{ error }}</div>{% endif %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <label class="lbl">Passcode<input type="password" name="passcode" required autofocus autocomplete="current-password" class="field"></label>
+      <button class="btn btn-primary w-full">Unlock</button>
+    </div>
   </form>
 </div>
 {% endblock %}

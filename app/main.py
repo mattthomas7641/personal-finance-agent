@@ -137,12 +137,14 @@ def dashboard(request: Request, month: str = ""):
         recent = s.exec(select(AgentRun).order_by(AgentRun.id.desc()).limit(5)).all()
     try:
         goals_ov = planning.overview()
+        register = fire.goal_register(goals_ov, fire.plan())
     except Exception:
-        goals_ov = None
+        goals_ov, register = None, []
     with session() as s:
         attention = s.exec(select(PlaidItem).where(PlaidItem.status != "ok")).all()
     return render(request, "dashboard.html", month=month, months=months, s=summary, ins=ins, attention=attention, cash=cash.summary(),
-                  trend=trend_items, uncategorized=uncategorized, recent=recent, gov=goals_ov)
+                  trend=trend_items, uncategorized=uncategorized, recent=recent, gov=goals_ov,
+                  register=register, nw=fire.net_worth())
 
 
 @app.get("/status", response_class=HTMLResponse)
@@ -489,7 +491,11 @@ def goals_page(request: Request, saved: str = ""):
         plan = s.get(Plan401k, 1) or Plan401k()
         goals = s.exec(select(Goal).order_by(Goal.target_date)).all()
     ov = planning.overview()
-    return render(request, "goals.html", ov=ov, plan=plan, goals=goals, saved=saved, categories=CATEGORIES, cash_accounts=cash.accounts(),
+    try:
+        fp = fire.plan()
+    except Exception:
+        fp = None
+    return render(request, "goals.html", ov=ov, plan=plan, goals=goals, register=fire.goal_register(ov, fp), fp=fp, saved=saved, categories=CATEGORIES, cash_accounts=cash.accounts(),
                   sched=planning.detect_paychecks(), today=dt.date.today())
 
 

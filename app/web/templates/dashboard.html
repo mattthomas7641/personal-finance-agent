@@ -1,89 +1,126 @@
 {% extends "base.html" %}
+{% from "_ui.html" import page_header, badge, alert, icon, I %}
+{% block title %}Overview · Northstar{% endblock %}
 {% block content %}
-<div class="flex items-end justify-between gap-4 flex-wrap mb-5">
-  <div><h1 class="text-xl font-semibold">Overview</h1>
-    <form method="get"><select name="month" class="field !w-auto mt-1" onchange="this.form.submit()">
-      {% for m in months %}<option {% if m == month %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></form></div>
-  {% if uncategorized %}<a href="/transactions?category=Uncategorized" class="text-sm text-amber-700 underline">{{ uncategorized }} uncategorized</a>{% endif %}
-</div>
+{% call page_header("Overview", "Spending, cash and goals" ~ (" · month in progress" if s.partial else "")) %}
+  <form method="get"><select name="month" class="field !w-auto" aria-label="Month" onchange="this.form.submit()">
+    {% for m in months %}<option {% if m == month %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></form>
+  {% if uncategorized %}<a href="/transactions?category=Uncategorized" class="btn">{{ uncategorized }} uncategorized</a>{% endif %}
+{% endcall %}
 
 {% for it in attention %}
-<a href="/connect#banks" class="block mb-3 rounded-lg px-4 py-3 text-sm {{ 'bg-amber-50 text-amber-900' if it.status == 'expiring' else 'bg-red-50 text-red-900' }}">
-  {% if it.status == "expiring" %}⏳ {{ it.institution or "A bank" }}'s connection expires {{ it.consent_expires.strftime("%b %d") if it.consent_expires else "soon" }}. Reconnect to keep syncing →
-  {% else %}⚠ {{ it.institution or "A bank" }} stopped syncing and needs you to log in again. Reconnect →{% endif %}
-</a>
+  {% call alert("warn" if it.status == "expiring" else "bad", "mb-3") %}
+    {% if it.status == "expiring" %}{{ it.institution or "A bank" }}'s connection expires {{ it.consent_expires.strftime("%b %d") if it.consent_expires else "soon" }}.
+    {% else %}{{ it.institution or "A bank" }} stopped syncing and needs you to log in again.{% endif %}
+    <a href="/connect#banks" class="font-medium underline">Reconnect</a>
+  {% endcall %}
 {% endfor %}
-<div class="card p-4 mb-4">{% include "_ask.html" %}
-  <div class="flex flex-wrap gap-2 mt-3 text-xs">
-    {% for q in ["What changed in my spending this month vs last?", "Which subscriptions am I paying for, and what do they cost per year?", "How much do I spend eating out per month on average?", "Am I on track to max out my 401(k)?", "Where should I cut back to hit my goals?"] %}
-      <form method="post" action="/ask"><input type="hidden" name="question" value="{{ q }}"><button class="pill hover:bg-zinc-200">{{ q }}</button></form>
-    {% endfor %}
+
+{% set budget_total = s.categories|selectattr("budget")|sum(attribute="budget") %}
+<section class="panel kpis mb-5" style="--n: 4">
+  <div class="kpi"><div class="stat-l">Spent{{ " so far" if s.partial }}</div><div class="stat-v">{{ s.spend|money }}</div>
+    <div class="stat-s">{% if budget_total %}of {{ budget_total|money0 }} budgeted{% else %}No budgets set{% endif %}</div></div>
+  <div class="kpi"><div class="stat-l">Income</div><div class="stat-v">{{ s.income|money }}</div><div class="stat-s">Take-home deposits</div></div>
+  <div class="kpi"><div class="stat-l">Net</div><div class="stat-v {{ 'c-ok' if s.net >= 0 else 'c-bad' }}">{{ s.net|money }}</div>
+    <div class="stat-s">{{ "Kept" if s.net >= 0 else "Overspent" }} this month</div></div>
+  <div class="kpi"><div class="stat-l">Net worth</div><div class="stat-v">{{ nw.net_worth|money0 }}</div>
+    <div class="stat-s">{{ nw.invested|money0 }} invested · {{ nw.liquid|money0 }} cash</div></div>
+</section>
+
+<div class="grid lg:grid-cols-3 gap-5">
+  <div class="lg:col-span-2 space-y-5 min-w-0">
+    <section class="panel">
+      <div class="panel-h"><h2>Spending by category</h2><a href="/goals#budgets" class="link text-[12.5px]">Edit budgets</a></div>
+      {% set mx = (s.categories|map(attribute='spent')|max) if s.categories else 1 %}
+      <table class="tbl">
+        <thead><tr><th>Category</th><th class="hidden sm:table-cell w-[38%]"></th><th class="r">Spent</th><th class="r">Budget</th></tr></thead>
+        <tbody>
+        {% for c in s.categories %}
+          <tr class="click" onclick="location.href='/transactions?month={{ month }}&category={{ c.category|urlencode }}'">
+            <td class="whitespace-nowrap"><a href="/transactions?month={{ month }}&category={{ c.category|urlencode }}" class="font-medium">{{ c.category }}</a>
+              {% if c.over %} {{ badge("Over", "bad") }}{% elif c.budget and s.partial and c.projected > c.budget %} {{ badge("On pace for " ~ (c.projected|money0), "warn") }}{% endif %}</td>
+            <td class="hidden sm:table-cell"><div class="bar"><span class="{{ 'bad' if c.over else '' }}" style="width: {{ (c.spent / mx * 100)|round }}%"></span></div></td>
+            <td class="r">{{ c.spent|money }}</td>
+            <td class="r c-muted">{{ c.budget|money0 if c.budget else "—" }}</td>
+          </tr>
+        {% else %}<tr><td colspan="4" class="c-muted text-center py-8">No spending this month yet.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <div class="panel-h"><h2>Monthly spending</h2><span class="meta">Last {{ trend|length }} months</span></div>
+      <div class="panel-b"><div class="relative h-56"><canvas id="trend"></canvas></div></div>
+    </section>
+  </div>
+
+  <div class="space-y-5 min-w-0">
+    <section class="panel">
+      <div class="panel-h"><h2>Goals</h2><a href="/goals" class="link text-[12.5px]">View all</a></div>
+      <ul>
+        {% for g in register[:5] %}
+          <li class="px-4 py-3 border-b border-[var(--line-soft)] last:border-0">
+            <a href="{{ g.href }}" class="flex items-center justify-between gap-2"><span class="font-medium truncate min-w-0">{{ g.name }}</span><span class="shrink-0">{{ badge(g.status, g.tone) }}</span></a>
+            {% if g.target %}<div class="bar mt-2"><span class="{{ g.tone if g.tone in ('ok', 'warn', 'bad') else '' }}" style="width: {{ g.progress_pct }}%"></span></div>
+              <div class="flex justify-between text-[12px] c-muted mt-1"><span>{{ g.current|money0 }} of {{ g.target|money0 }}</span><span>{{ g.progress_pct }}%</span></div>
+            {% else %}<div class="text-[12px] c-muted mt-1">{{ g.takes }}</div>{% endif %}
+          </li>
+        {% else %}<li class="px-4 py-4 hint">Set up goals on the <a class="link" href="/goals">Goals</a> page.</li>{% endfor %}
+      </ul>
+    </section>
+
+    <section class="panel">
+      <div class="panel-h"><h2>Ask Northstar</h2><a href="/runs" class="link text-[12.5px]">History</a></div>
+      <div class="panel-b">
+        {% include "_ask.html" %}
+        <div class="mt-3 space-y-1">
+          {% for q in ["What changed in my spending this month vs last?", "Which subscriptions am I paying for, and what do they cost per year?", "Where should I cut back to hit my goals?"] %}
+            <form method="post" action="/ask"><input type="hidden" name="question" value="{{ q }}"><button class="text-left text-[13px] link">{{ q }}</button></form>
+          {% endfor %}
+        </div>
+        {% if recent %}<div class="mt-3 pt-3 border-t border-[var(--line-soft)]"><div class="hint mb-1">Recent</div>
+          {% for r in recent[:3] %}<a class="block text-[13px] truncate hover:underline" href="/runs/{{ r.id }}">{{ r.question }}</a>{% endfor %}</div>{% endif %}
+      </div>
+    </section>
+
+    {% if ins.price_increases or ins.duplicates or ins.unusual %}
+    <section class="panel">
+      <div class="panel-h"><h2>Needs a look</h2></div>
+      <ul class="text-[13px]">
+        {% for p in ins.price_increases %}<li class="px-4 py-2.5 border-b border-[var(--line-soft)] last:border-0 flex gap-2"><span class="c-warn">{{ icon(I.warn) }}</span>
+          <span><b class="font-medium">{{ p.merchant }}</b> went up {{ p.previous_amount|money }} → {{ p.amount|money }} <span class="c-muted">since {{ p.price_changed_on }}</span></span></li>{% endfor %}
+        {% for d in ins.duplicates %}<li class="px-4 py-2.5 border-b border-[var(--line-soft)] last:border-0 flex gap-2"><span class="c-bad">{{ icon(I.bad) }}</span>
+          <span>Possible duplicate: <b class="font-medium">{{ d.merchant }}</b> {{ d.amount|money }} on {{ d.dates|join(' and ') }}</span></li>{% endfor %}
+        {% for u in ins.unusual[:3] %}<li class="px-4 py-2.5 border-b border-[var(--line-soft)] last:border-0 flex gap-2"><span class="c-muted">{{ icon(I.info) }}</span>
+          <span>Large charge: <b class="font-medium">{{ u.merchant }}</b> {{ u.amount|money }} on {{ u.date }} <span class="c-muted">(usual {{ u.category }}: {{ u.typical|money }})</span></span></li>{% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% if cash.accounts %}
+    <section class="panel">
+      <div class="panel-h"><h2>Cash &amp; savings</h2><span class="meta num">{{ cash.total|money }}</span></div>
+      <div class="px-4 rows text-[13px]">
+        {% for a in cash.accounts %}<div><span>{{ a.name }}{% if a.stale %} {{ badge("Update", "warn") }}{% endif %}</span><span class="v">{{ a.balance|money }}</span></div>{% endfor %}
+      </div>
+      {% if cash.interest_year %}<div class="panel-f">Earning about {{ cash.interest_year|money }} a year in interest</div>{% endif %}
+    </section>
+    {% endif %}
+
+    <section class="panel">
+      <div class="panel-h"><h2>Recurring charges</h2><a href="/plan" class="link text-[12.5px]">Subscriptions</a></div>
+      <div class="px-4 rows text-[13px]">
+        {% for r in ins.subscriptions if r.active %}<div><span class="truncate">{{ r.merchant }} <span class="c-muted">· {{ r.category }}</span></span><span class="v">{{ r.amount|money }}/mo</span></div>
+        {% else %}<div><span class="c-muted">None found yet. This needs about 3 months of history.</span></div>{% endfor %}
+      </div>
+    </section>
   </div>
 </div>
 
-<div class="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
-  <div class="card p-3 sm:p-4"><div class="text-xs text-zinc-500">Spent {% if s.partial %}(so far){% endif %}</div><div class="text-[15px] sm:text-2xl font-semibold num mt-1 tracking-tight">{{ s.spend|money }}</div></div>
-  <div class="card p-3 sm:p-4"><div class="text-xs text-zinc-500">Income</div><div class="text-[15px] sm:text-2xl font-semibold num mt-1 tracking-tight">{{ s.income|money }}</div></div>
-  <div class="card p-3 sm:p-4"><div class="text-xs text-zinc-500">Net</div><div class="text-[15px] sm:text-2xl font-semibold num mt-1 tracking-tight {{ 'text-emerald-700' if s.net >= 0 else 'text-red-700' }}">{{ s.net|money }}</div></div>
-</div>
-
-<div class="grid lg:grid-cols-5 gap-4">
-  <section class="lg:col-span-3 space-y-4">
-    <div class="card p-4">
-      <h2 class="font-semibold mb-3">Spending by category</h2>
-      {% set mx = (s.categories|map(attribute='spent')|max) if s.categories else 1 %}
-      {% for c in s.categories %}
-        <a href="/transactions?month={{ month }}&category={{ c.category|urlencode }}" class="block mb-2 group">
-          <div class="flex justify-between text-sm"><span class="group-hover:underline">{{ c.category }}</span>
-            <span class="num">{{ c.spent|money }}{% if c.budget %} <span class="text-zinc-400">/ {{ c.budget|money }}</span>{% endif %}</span></div>
-          <div class="h-2 rounded bg-zinc-100 mt-1 relative">
-            <div class="h-2 rounded {{ 'bg-red-500' if c.over else 'bg-zinc-800' }}" style="width: {{ (c.spent / mx * 100)|round }}%"></div>
-          </div>
-          {% if c.budget and s.partial and c.projected > c.budget and not c.over %}<div class="text-xs text-amber-700 mt-0.5">On pace for {{ c.projected|money }} this month</div>{% endif %}
-        </a>
-      {% endfor %}
-    </div>
-    <div class="card p-4"><h2 class="font-semibold mb-2">Monthly spending</h2><canvas id="trend" height="110"></canvas></div>
-  </section>
-
-  <section class="lg:col-span-2 space-y-4">
-    {% if gov and (gov.k401 or gov.goals) %}<a href="/goals" class="card p-4 block hover:border-zinc-400">
-      <h2 class="font-semibold mb-2">Goals</h2>
-      {% if gov.k401 %}<div class="text-sm flex justify-between"><span>401(k) {{ gov.k401.year }}</span>
-        <span class="{{ 'text-emerald-700' if gov.k401.on_track_to_max else 'text-amber-700' }}">{{ "on track to max" if gov.k401.on_track_to_max else (gov.k401.shortfall|money) ~ " short" }}</span></div>{% endif %}
-      {% for g in gov.goals %}<div class="text-sm flex justify-between"><span>{{ g.name }}</span>
-        <span class="{{ 'text-emerald-700' if g.on_track else 'text-amber-700' }}">{{ "on track" if g.on_track else "+" ~ (g.monthly_gap|money) ~ "/mo needed" }}</span></div>{% endfor %}
-    </a>{% endif %}
-    {% if cash.accounts %}<a href="/connect#manual" class="card p-4 block hover:border-zinc-400">
-      <h2 class="font-semibold mb-2">Cash &amp; savings <span class="font-normal text-zinc-500 text-sm">· {{ cash.total|money }}</span></h2>
-      {% for a in cash.accounts %}<div class="text-sm flex justify-between"><span>{{ a.name }}{% if a.stale %} <span class="text-amber-600 text-xs">update</span>{% endif %}</span><span class="num">{{ a.balance|money }}</span></div>{% endfor %}
-      {% if cash.interest_year %}<div class="text-xs text-zinc-500 mt-1">Earning about {{ cash.interest_year|money }}/yr in interest</div>{% endif %}
-    </a>{% endif %}
-    {% if ins.price_increases %}<div class="card p-4 !border-amber-300">
-      <h2 class="font-semibold mb-2">Price increases</h2>
-      {% for p in ins.price_increases %}<div class="text-sm">{{ p.merchant }}: {{ p.previous_amount|money }} → <b>{{ p.amount|money }}</b> <span class="text-zinc-500">since {{ p.price_changed_on }}</span></div>{% endfor %}
-    </div>{% endif %}
-    {% if ins.duplicates %}<div class="card p-4 !border-red-300">
-      <h2 class="font-semibold mb-2">Possible duplicate charges</h2>
-      {% for d in ins.duplicates %}<div class="text-sm">{{ d.merchant }} · {{ d.amount|money }} on {{ d.dates|join(' and ') }}</div>{% endfor %}
-    </div>{% endif %}
-    <div class="card p-4">
-      <h2 class="font-semibold mb-2">Recurring charges</h2>
-      {% for r in ins.subscriptions if r.active %}
-        <div class="flex justify-between text-sm py-0.5"><span>{{ r.merchant }} <span class="text-zinc-400">· {{ r.category }}</span></span><span class="num">{{ r.amount|money }}/mo</span></div>
-      {% else %}<p class="text-sm text-zinc-500">None detected yet (needs 3+ months).</p>{% endfor %}
-    </div>
-    {% if ins.unusual %}<div class="card p-4">
-      <h2 class="font-semibold mb-2">Unusually large charges</h2>
-      {% for u in ins.unusual[:5] %}<div class="text-sm">{{ u.date }} · {{ u.merchant }} · <b>{{ u.amount|money }}</b> <span class="text-zinc-500">(typical {{ u.category }}: {{ u.typical|money }})</span></div>{% endfor %}
-    </div>{% endif %}
-    {% if recent %}<div class="card p-4"><h2 class="font-semibold mb-2">Recent questions</h2>
-      {% for r in recent %}<a class="block text-sm underline truncate" href="/runs/{{ r.id }}">{{ r.question }}</a>{% endfor %}</div>{% endif %}
-  </section>
-</div>
 <script>
 new Chart(document.getElementById('trend'), {type: 'bar',
-  data: {labels: {{ trend|map(attribute=0)|list|tojson }}, datasets: [{data: {{ trend|map(attribute=1)|map('round', 2)|list|tojson }}, backgroundColor: '#27272a', borderRadius: 4}]},
-  options: {plugins: {legend: {display: false}}, scales: {y: {ticks: {callback: v => '$' + v.toLocaleString()}}}}});
+  data: {labels: {{ trend|map(attribute=0)|list|tojson }}, datasets: [{data: {{ trend|map(attribute=1)|map('round', 2)|list|tojson }}, backgroundColor: '#2451c7', borderRadius: 3, maxBarThickness: 36}]},
+  options: {maintainAspectRatio: false, plugins: {legend: {display: false}, tooltip: {callbacks: {label: i => '$' + Math.round(i.raw).toLocaleString()}}},
+    scales: {x: {grid: {display: false}}, y: {border: {display: false}, ticks: {maxTicksLimit: 5, callback: v => '$' + v.toLocaleString()}}}}});
 </script>
 {% endblock %}

@@ -1,78 +1,86 @@
 {% extends "base.html" %}
+{% from "_ui.html" import page_header, badge, alert, icon, I %}
+{% block title %}Privacy & security · Northstar{% endblock %}
 {% block content %}
-<h1 class="text-xl font-semibold mb-1">Privacy</h1>
-{% if error %}<div class="mb-3 text-sm text-red-800 bg-red-50 rounded-lg p-3">{{ error }}</div>{% endif %}
-{% if saved == "passcode" %}<div class="mb-3 text-sm text-emerald-800 bg-emerald-50 rounded-lg p-3">Passcode saved. Any phone that was signed in needs to sign in again.</div>{% endif %}
-<p class="text-sm text-zinc-600 mb-4">Your data is stored only on this computer. Below is exactly what may be sent to the Claude API, and a log of everything that has been. Full <a class="underline" href="https://mattthomas7641.github.io/northstar/privacy.html" target="_blank" rel="noopener">privacy policy</a> and <a class="underline" href="https://github.com/mattthomas7641/personal-finance-agent/blob/main/SECURITY.md" target="_blank" rel="noopener">security policy</a>.</p>
+{% call page_header("Privacy & security", "Your data stays on this computer. This page shows exactly what can be sent to the Claude API, and everything that has been.") %}
+  <a class="btn" href="https://mattthomas7641.github.io/northstar/privacy.html" target="_blank" rel="noopener">Privacy policy</a>
+  <a class="btn" href="https://github.com/mattthomas7641/personal-finance-agent/blob/main/SECURITY.md" target="_blank" rel="noopener">Security policy</a>
+{% endcall %}
+{% if error %}{% call alert("bad", "mb-4") %}{{ error }}{% endcall %}{% endif %}
+{% if saved == "passcode" %}{% call alert("ok", "mb-4") %}Passcode saved. Any phone that was signed in needs to sign in again.{% endcall %}{% endif %}
 
-<div class="grid md:grid-cols-2 gap-4">
-  <form method="post" action="/privacy" class="card p-5 space-y-3">
-    <h2 class="font-semibold">What gets sent</h2>
-    <label class="flex gap-3 items-start text-sm"><input type="radio" name="mode" value="standard" {% if mode != "local_only" %}checked{% endif %} class="mt-1">
-      <span><b>Standard</b>: new transaction descriptions are scrubbed, then sent to Claude to categorize them. Questions you ask send scrubbed query results.</span></label>
-    <label class="flex gap-3 items-start text-sm"><input type="radio" name="mode" value="local_only" {% if mode == "local_only" %}checked{% endif %} class="mt-1">
-      <span><b>Local only</b>: categorization uses your rules, built-in rules and Plaid's categories. Nothing is sent unless you ask a question or click "Categorize with AI".</span></label>
-    <div>
-      <div class="text-sm font-medium mb-1">Always remove these words (one per line)</div>
-      <textarea name="terms" rows="4" class="field mono text-xs" placeholder="Your name&#10;Your street&#10;Your employer">{{ terms|join("\n") }}</textarea>
-      <p class="text-xs text-zinc-500 mt-1">People's names in Zelle/Venmo/Cash App, emails, phone numbers and card/account digits are always removed.</p>
+<div class="grid lg:grid-cols-2 gap-5 mb-5">
+  <form method="post" action="/privacy" class="panel min-w-0">
+    <div class="panel-h"><h2>What gets sent</h2>{{ badge("Local only" if mode == "local_only" else "Standard", "info" if mode == "local_only" else "muted") }}</div>
+    <div class="panel-b space-y-3">
+      <label class="flex gap-3 items-start text-[13.5px] p-3 rounded-lg border {{ 'border-[var(--accent)] bg-[var(--accent-soft)]' if mode != 'local_only' else 'border-[var(--line)]' }}"><input type="radio" name="mode" value="standard" {% if mode != "local_only" %}checked{% endif %} class="mt-0.5">
+        <span><b class="font-medium">Standard.</b> New transaction descriptions are scrubbed, then sent to Claude to categorize. Questions send scrubbed query results.</span></label>
+      <label class="flex gap-3 items-start text-[13.5px] p-3 rounded-lg border {{ 'border-[var(--accent)] bg-[var(--accent-soft)]' if mode == 'local_only' else 'border-[var(--line)]' }}"><input type="radio" name="mode" value="local_only" {% if mode == "local_only" %}checked{% endif %} class="mt-0.5">
+        <span><b class="font-medium">Local only.</b> Categorizing uses your rules, built-in rules and Plaid's categories. Nothing is sent unless you ask a question or choose to categorize with AI.</span></label>
+      <label class="lbl">Always remove these words <span class="font-normal c-muted">(one per line)</span>
+        <textarea name="terms" rows="4" class="field mono text-[12.5px]" placeholder="Your name&#10;Your street&#10;Your employer">{{ terms|join("\n") }}</textarea></label>
+      <p class="hint">Names in Zelle, Venmo and Cash App payments, emails, phone numbers and card or account digits are always removed.</p>
     </div>
-    <button class="btn btn-primary">Save</button>
+    <div class="panel-f"><button class="btn btn-primary btn-sm">Save</button></div>
   </form>
 
-  <div class="card p-5 space-y-2">
-    <h2 class="font-semibold">Never sent</h2>
-    <ul class="text-sm list-disc pl-5 space-y-1 text-zinc-700">
-      <li>Bank logins (entered only in Plaid's window)</li>
-      <li>Plaid access tokens (stored in your macOS Keychain; the agent can't read them)</li>
-      <li>Full account or card numbers, internal transaction IDs</li>
-      <li>Anything when you're not categorizing or asking a question</li>
+  <section class="panel min-w-0">
+    <div class="panel-h"><h2>Never sent</h2></div>
+    <ul class="text-[13.5px]">
+      {% for item in ["Bank logins, which you enter only in Plaid's window", "Plaid access tokens, kept in your macOS Keychain where the agent can't read them", "Full account or card numbers and internal transaction IDs", "Anything at all when you're not categorizing or asking a question"] %}
+        <li class="flex gap-2.5 px-4 py-2.5 border-b border-[var(--line-soft)] last:border-0"><span class="c-ok">{{ icon(I.ok) }}</span>{{ item }}</li>
+      {% endfor %}
     </ul>
     {% if mode == "local_only" and uncategorized %}
-      <form method="post" action="/connect/categorize" class="pt-2"><input type="hidden" name="ai" value="1">
-        <button class="btn">Categorize {{ uncategorized }} with AI (sends scrubbed descriptions)</button></form>
+      <form method="post" action="/connect/categorize" class="panel-f"><input type="hidden" name="ai" value="1">
+        <button class="btn btn-sm">Categorize {{ uncategorized }} with AI (sends scrubbed descriptions)</button></form>
     {% endif %}
+  </section>
+</div>
+
+<section id="phone" class="panel mb-5 scroll-mt-20">
+  <div class="panel-h"><h2>Phone access</h2>{{ badge("Passcode set" if has_passcode else "No passcode", "ok" if has_passcode else "warn") }}</div>
+  <div class="panel-b">
+    <p class="hint mb-3 max-w-[80ch]">Only this Mac and your own devices on Tailscale can open Northstar, and phones need the passcode. Pages you open on your phone are saved there, so you can see your last-synced numbers when the Mac is off.</p>
+    {% if is_local %}
+      <form method="post" action="/security/passcode" class="grid sm:grid-cols-3 gap-3 mb-4 max-w-3xl">
+        <input type="password" name="passcode" required minlength="6" class="field" aria-label="New passcode" placeholder="{{ 'New passcode' if has_passcode else 'Choose a passcode (6+ characters)' }}">
+        <input type="password" name="confirm" required minlength="6" class="field" aria-label="Repeat passcode" placeholder="Repeat it">
+        <button class="btn btn-primary">{{ "Change passcode" if has_passcode else "Set passcode" }}</button>
+      </form>
+    {% else %}<p class="text-[13.5px] mb-4">Signed in on this device. <a class="link" href="/logout">Sign out and delete offline copies</a></p>{% endif %}
+    <ol class="text-[13.5px] space-y-2 max-w-[80ch]">
+      {% set steps = ["Install Tailscale (free) on this Mac and your iPhone, and sign in to the same account on both.",
+        "Passcode is set." if has_passcode else "Set a passcode above."] %}
+      {% for s in steps %}<li class="flex gap-3"><span class="num c-muted w-4 text-right shrink-0">{{ loop.index }}</span><span>{{ s }}</span></li>{% endfor %}
+      <li class="flex gap-3"><span class="num c-muted w-4 text-right shrink-0">3</span><span>On this Mac, run once in Terminal: <span class="mono bg-[var(--head)] border border-[var(--line)] rounded px-1">tailscale serve --bg 8766</span>. If it asks, allow HTTPS certificates for your tailnet.</span></li>
+      <li class="flex gap-3"><span class="num c-muted w-4 text-right shrink-0">4</span><span>On your iPhone, open Safari to
+        {% if tailscale_url %}<span class="mono font-medium">{{ tailscale_url }}</span>{% else %}<span class="mono">https://&lt;your-mac&gt;.&lt;tailnet&gt;.ts.net</span> (shown here once Tailscale is running){% endif %},
+        sign in, then Share, Add to Home Screen.</span></li>
+    </ol>
   </div>
-</div>
+</section>
 
-<div id="phone" class="card p-5 mt-4">
-  <h2 class="font-semibold mb-1">Phone access</h2>
-  <p class="text-sm text-zinc-600 mb-3">Only this Mac and your own devices on Tailscale can open Northstar, and phones need the passcode.
-    Pages you open on your phone are saved there, so you can still see your last-synced numbers when the Mac is off.</p>
-  {% if is_local %}
-    <form method="post" action="/security/passcode" class="grid sm:grid-cols-3 gap-2 mb-3">
-      <input type="password" name="passcode" required minlength="6" class="field" placeholder="{{ 'New passcode' if has_passcode else 'Choose a passcode (6+ characters)' }}">
-      <input type="password" name="confirm" required minlength="6" class="field" placeholder="Repeat it">
-      <button class="btn btn-primary">{{ "Change passcode" if has_passcode else "Set passcode" }}</button>
-    </form>
-  {% else %}<p class="text-sm mb-3">Signed in on this device. <a class="underline" href="/logout">Sign out and delete offline copies</a></p>{% endif %}
-  <ol class="text-sm list-decimal pl-5 space-y-1 text-zinc-700">
-    <li>Install Tailscale (free) on this Mac and your iPhone, and sign in to the same account on both.</li>
-    <li>{% if has_passcode %}✓ Passcode is set.{% else %}Set a passcode above.{% endif %}</li>
-    <li>On this Mac, run once in Terminal: <span class="mono">tailscale serve --bg 8766</span>
-      (if it asks, allow HTTPS certificates for your tailnet). This gives the app a private HTTPS address, which the iPhone needs to save pages for offline use.</li>
-    <li>On your iPhone, open Safari to
-      {% if tailscale_url %}<span class="mono font-medium">{{ tailscale_url }}</span>{% else %}<span class="mono">https://&lt;your-mac&gt;.&lt;tailnet&gt;.ts.net</span> (shown here once Tailscale is running){% endif %},
-      sign in, then Share → Add to Home Screen.</li>
-  </ol>
-</div>
+<section class="panel mb-5">
+  <div class="panel-h"><h2>Scrubbing preview</h2><span class="meta">Only descriptions that changed</span></div>
+  <div class="overflow-x-auto"><table class="tbl">
+    <thead><tr><th>Before</th><th>Sent as</th></tr></thead>
+    <tbody>
+    {% for before, after in changed %}<tr><td class="mono text-[12px] c-muted">{{ before }}</td><td class="mono text-[12px]">{{ after }}</td></tr>
+    {% else %}<tr><td colspan="2" class="c-muted">Nothing in your data needed scrubbing yet.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
 
-<div class="card p-5 mt-4">
-  <h2 class="font-semibold mb-1">Scrubbing preview</h2>
-  <p class="text-sm text-zinc-600 mb-2">How your descriptions look after scrubbing (only ones that changed).</p>
-  <table class="w-full text-xs mono"><tbody>
-  {% for before, after in changed %}<tr class="border-t border-zinc-100"><td class="py-1 text-zinc-500">{{ before }}</td><td class="py-1">→ {{ after }}</td></tr>
-  {% else %}<tr><td class="py-2 text-zinc-500">Nothing in your data needed scrubbing yet.</td></tr>{% endfor %}
-  </tbody></table>
-</div>
-
-<div class="card p-5 mt-4">
-  <div class="flex items-center justify-between mb-2"><h2 class="font-semibold">Sent to Claude ({{ "{:,}".format(sent_chars) }} characters total)</h2>
-    <form method="post" action="/privacy/clear_log"><button class="text-xs text-zinc-500 underline">clear log</button></form></div>
+<section class="panel">
+  <div class="panel-h"><h2>Sent to Claude</h2>
+    <div class="flex items-center gap-3"><span class="meta">{{ "{:,}".format(sent_chars) }} characters total</span>
+      <form method="post" action="/privacy/clear_log"><button class="btn btn-sm btn-ghost">Clear log</button></form></div></div>
   {% for o in log %}
-    <details class="border-t border-zinc-100 py-1.5"><summary class="text-sm cursor-pointer"><span class="pill">{{ o.kind }}</span>
-      <span class="text-zinc-500 text-xs">{{ o.created_at.strftime("%b %d %H:%M") }} · {{ o.chars }} chars</span> <span class="mono text-xs">{{ o.text[:110] }}</span></summary>
-      <pre class="text-xs mono pre bg-zinc-50 rounded p-2 mt-1">{{ o.text }}</pre></details>
-  {% else %}<p class="text-sm text-zinc-500">Nothing has been sent yet.</p>{% endfor %}
-</div>
+    <details class="border-b border-[var(--line-soft)] last:border-0">
+      <summary class="px-4 py-2.5 flex items-center gap-2 text-[13px] min-w-0">{{ badge(o.kind, "muted", true) }}
+        <span class="c-muted text-[12px] whitespace-nowrap">{{ o.created_at.strftime("%b %d %H:%M") }} · {{ o.chars }} chars</span> <span class="mono text-[12px] truncate">{{ o.text[:110] }}</span></summary>
+      <pre class="text-[12px] mono pre bg-[var(--head)] border-t border-[var(--line-soft)] px-4 py-3">{{ o.text }}</pre></details>
+  {% else %}<p class="px-4 py-4 text-[13px] c-muted">Nothing has been sent yet.</p>{% endfor %}
+</section>
 {% endblock %}

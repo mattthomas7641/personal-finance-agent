@@ -118,3 +118,19 @@ def test_net_worth_assets_minus_debts():
 
 def test_needs_birth_year():
     assert fire.plan(TODAY)["needs"] == "birth_year"
+
+
+def test_goal_register_includes_retirement_roth_and_401k():
+    ov = {"retirement": None, "goals": [], "k401": None,
+          "roth": {"tax_year": 2026, "maxed": False, "allowed": 7500, "contributed": 1500, "remaining": 6000,
+                   "monthly_to_max_by_dec": 2000}}
+    fp = {"target_age": 40, "invested": 150000, "targets": [
+        {"target": 1500000, "required_monthly": 4000, "extra_monthly": 2500, "rating": "Aggressive"},
+        {"target": 2000000, "required_monthly": 6000, "extra_monthly": 4500, "rating": "Extreme"}]}
+    rows = fire.goal_register(ov, fp)
+    names = [r["name"] for r in rows]
+    assert names == ["Retire at 40", "Roth IRA 2026", "401(k)"]
+    assert rows[0]["detail"] == "$1,500,000–$2,000,000 invested" and rows[0]["tone"] == "warn" and rows[0]["progress_pct"] == 10
+    assert rows[1]["status"] == "In progress" and "$2,000/mo" in rows[1]["takes"]
+    assert rows[2]["status"] == "Set up"
+    assert fire.goal_register(ov, {"needs": "birth_year"})[0]["status"] == "Set up"

@@ -1,0 +1,25 @@
+{% macro icon(d, size=16) %}<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ d }}"/></svg>{% endmacro %}
+
+{% set I = {
+  "warn": "M12 9v4m0 3.5h.01M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
+  "info": "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5m0-8h.01",
+  "ok": "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm-3.5-9 2.5 2.5 4.5-5",
+  "bad": "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 8v5m0 3h.01",
+  "plus": "M12 5v14M5 12h14", "chev": "M9 6l6 6-6 6", "arrow": "M5 12h14m-5-5 5 5-5 5",
+  "upload": "M12 16V4m-5 5 5-5 5 5M4 20h16", "sync": "M20 11a8 8 0 0 0-14.9-3M4 13a8 8 0 0 0 14.9 3M4 4v4h4m12 12v-4h-4",
+} %}
+
+{% macro page_header(title, subtitle="") %}
+<div class="page-h">
+  <div class="min-w-0"><h1>{{ title }}</h1>{% if subtitle %}<p>{{ subtitle }}</p>{% endif %}</div>
+  {% if caller %}<div class="flex flex-wrap items-center gap-2">{{ caller() }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro badge(text, tone="muted", plain=false) %}<span class="badge t-{{ tone }} {{ 'plain' if plain }}">{{ text }}</span>{% endmacro %}
+
+{% macro alert(tone="info", cls="") %}
+<div class="alert t-{{ tone }} {{ cls }}">{{ icon(I[tone] if tone in I else I.info) }}<div class="min-w-0">{{ caller() }}</div></div>
+{% endmacro %}
+
+{% macro saved_toast(show, text="Saved") %}{% if show %}<span class="badge t-ok">{{ text }}</span>{% endif %}{% endmacro %}
