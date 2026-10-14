@@ -1,8 +1,8 @@
 {
   "checker": {
-    "caught": "7/7",
+    "caught": "10/10",
     "false_positives": "0/5",
-    "at": "2026-10-14 02:04"
+    "at": "2026-10-14 17:15"
   },
   "categorize": {
     "merchant_accuracy": 0.95,

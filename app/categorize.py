@@ -10,6 +10,7 @@ So a year of transactions usually costs one or two LLM calls, and corrections st
 """
 from __future__ import annotations
 
+import logging
 import re
 from typing import Literal
 
@@ -31,18 +32,26 @@ def normalize(raw: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+log = logging.getLogger(__name__)
+
+
 # High-precision patterns every real bank export needs. Without the Transfers rules, paying your
 # credit card would be counted twice: once as the card purchases, once as the checking payment.
 BUILTIN = [
-    (re.compile(r"PAYMENT\s*(-\s*)?THANK YOU|AUTOPAY|AUTO PAY|CRCARDPMT|CREDIT CARD PAYMENT|CARD PAYMENT|EPAY|PAYMENT RECEIVED", re.I), "Transfers"),
-    (re.compile(r"TRANSFER (TO|FROM)|ONLINE TRANSFER|ZELLE|VENMO|CASH APP|ROBINHOOD|VANGUARD|FIDELITY|SCHWAB|WEALTHFRONT|BETTERMENT", re.I), "Transfers"),
-    (re.compile(r"PAYROLL|DIRECT DEP|DIR DEP|SALARY", re.I), "Income"),
-    (re.compile(r"INTEREST CHARGE|LATE FEE|ANNUAL FEE|SERVICE FEE|OVERDRAFT|FOREIGN TRANSACTION FEE|ATM FEE", re.I), "Fees & Interest"),
+    (re.compile(r"\bPAYMENT\s*(-\s*)?THANK YOU\b|\bAUTO\s?PAY\b|\bCRCARDPMT\b|\bCREDIT CARD PAYMENT\b|\bCARD PAYMENT\b|\bE-?PAY(MENT)?\b|\bPAYMENT RECEIVED\b", re.I), "Transfers"),
+    (re.compile(r"\bTRANSFER (TO|FROM)\b|\bONLINE TRANSFER\b|\bZELLE\b|\bVENMO\b|\bCASH APP\b|\bROBINHOOD\b|\bVANGUARD\b|\bFIDELITY\b|\bSCHWAB\b|\bWEALTHFRONT\b|\bBETTERMENT\b", re.I), "Transfers"),
+    (re.compile(r"\bPAYROLL\b|\bDIRECT DEP|\bDIR DEP\b|\bSALARY\b", re.I), "Income"),
+    (re.compile(r"\bINTEREST CHARGE\b|\bLATE FEE\b|\bANNUAL FEE\b|\bSERVICE FEE\b|\bOVERDRAFT\b|\bFOREIGN TRANSACTION FEE\b|\bATM FEE\b", re.I), "Fees & Interest"),
 ]
 
 
-def builtin_category(raw: str) -> str | None:
-    return next((cat for pat, cat in BUILTIN if pat.search(raw)), None)
+def builtin_category(raw: str, amount: float | None = None) -> str | None:
+    """Whole-word matches only, so "CELERY SALARYMAN" or "HOMEDEPOTEPAY" don't count. With an amount,
+    Income must be money coming in (negative, Plaid convention); a charge that mentions SALARY is spending."""
+    cat = next((cat for pat, cat in BUILTIN if pat.search(raw)), None)
+    if cat == "Income" and amount is not None and amount > 0:
+        return None
+    return cat
 
 
 def display_name(key: str) -> str:
@@ -96,21 +105,29 @@ async def llm_label(keys: list[tuple[str, float]], examples: str = "") -> tuple[
 
     out: dict[str, Labeled] = {}
     total = 0.0
+    error: Exception | None = None
     for i in range(0, len(keys), 80):
         chunk = keys[i:i + 80]
         lines = "\n".join(f"{n}: {redact(k)}  ({'+' if amt > 0 else '-'}{abs(amt):.0f})" for n, (k, amt) in enumerate(chunk))
         payload = "Descriptors (amount sign: + spend, - money in):\n" + lines
         record("categorize", payload)
-        res, cost = await structured(
-            role="categorize",
-            instructions=INSTRUCTIONS,
-            cached_context="Examples of the user's own corrections:\n" + (redact(examples) if examples else "(none)"),
-            user=payload, output=Batch, effort="low", max_tokens=8000,
-        )
+        try:
+            res, cost = await structured(
+                role="categorize",
+                instructions=INSTRUCTIONS,
+                cached_context="Examples of the user's own corrections:\n" + (redact(examples) if examples else "(none)"),
+                user=payload, output=Batch, effort="low", max_tokens=8000,
+            )
+        except Exception as e:  # one failed batch keeps the labels from the batches that worked
+            log.warning("categorization batch failed: %s", e)
+            error = e
+            continue
         total += cost
         for it in res.items:
             if 0 <= it.id < len(chunk):
                 out[chunk[it.id][0]] = it
+    if error and not out:
+        raise error
     return out, total
 
 
@@ -133,7 +150,7 @@ async def categorize_pending(use_llm: bool | None = None) -> dict:
         key = normalize(t.raw_name)
         if key in rules:
             t.category, t.merchant, t.category_source = rules[key].category, rules[key].merchant or display_name(key), "rule"
-        elif cat := builtin_category(t.raw_name):
+        elif cat := builtin_category(t.raw_name, t.amount):
             t.category, t.category_source = cat, "rule"
             t.merchant = t.merchant or display_name(key)
         elif key in memory:
@@ -148,10 +165,23 @@ async def categorize_pending(use_llm: bool | None = None) -> dict:
             continue
         stats[t.category_source] += 1
 
+    # Save what rules, memory and Plaid already decided before calling the API, so an outage loses nothing.
+    with session() as s:
+        for t in todo:
+            if t.category:
+                s.merge(t)
+        s.commit()
+
     if need and use_llm:
         examples = "\n".join(f"{k} -> {r.category}" for k, r in list(rules.items())[:40])
         keys = [(k, v[0].amount) for k, v in need.items()]
-        labels, cost = await llm_label(keys, examples)
+        try:
+            labels, cost = await llm_label(keys, examples)
+        except Exception as e:
+            log.warning("AI categorization unavailable: %s", e)
+            labels, cost = {}, 0.0
+            from app.llm import friendly_api_error
+            stats["error"] = friendly_api_error(e)
         stats["cost_usd"] = round(cost, 4)
         for key, txns in need.items():
             lab = labels.get(key)

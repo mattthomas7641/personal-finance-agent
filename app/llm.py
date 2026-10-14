@@ -10,12 +10,15 @@ from app.config import load_config
 
 T = TypeVar("T", bound=BaseModel)
 
-# $ per 1M tokens (input, output). Cache reads are ~10% of input.
+# $ per 1M tokens: (input, output, cache-read share of input). Cache writes are 1.25x input (5-minute TTL).
 PRICES = {
-    "claude-opus-5-5": (4.0, 20.0),
-    "claude-opus-5": (5.0, 25.0),
-    "claude-sonnet-5": (2.0, 10.0),
-    "claude-haiku-4-5": (1.0, 5.0),
+    "claude-fable-5-1": (10.0, 50.0, 0.1),
+    "claude-opus-5-5": (4.0, 20.0, 0.05),
+    "claude-opus-5": (5.0, 25.0, 0.1),
+    "claude-sonnet-5-5": (2.0, 10.0, 0.1),
+    "claude-sonnet-5": (2.0, 10.0, 0.1),
+    "claude-haiku-5-5": (0.10, 0.50, 0.1),
+    "claude-haiku-4-5": (1.0, 5.0, 0.1),
 }
 
 _client: anthropic.AsyncAnthropic | None = None
@@ -34,15 +37,32 @@ def model(role: str) -> str:
 
 
 def cost(model_id: str, usage) -> float:
-    inp, out = PRICES.get(model_id, (5.0, 25.0))
+    inp, out, read_share = PRICES.get(model_id, (5.0, 25.0, 0.1))
     cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
     cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
     return (
         usage.input_tokens * inp
-        + cache_read * inp * 0.1
+        + cache_read * inp * read_share
         + cache_write * inp * 1.25
         + usage.output_tokens * out
     ) / 1_000_000
+
+
+def friendly_api_error(e: Exception) -> str:
+    """Turn an Anthropic SDK error into something the user can act on."""
+    if isinstance(e, anthropic.AuthenticationError):
+        return "The Claude API key was rejected. Check ANTHROPIC_API_KEY in .env, then restart Northstar."
+    if isinstance(e, anthropic.PermissionDeniedError):
+        return "The Claude API key isn't allowed to use this model."
+    if isinstance(e, anthropic.RateLimitError):
+        return "Claude is rate-limiting requests right now. Try again in a minute."
+    if isinstance(e, anthropic.BadRequestError) and "credit" in str(e).lower():
+        return "Your Anthropic account is out of credits. Add credits at console.anthropic.com."
+    if isinstance(e, (anthropic.APIConnectionError, anthropic.APITimeoutError)):
+        return "Couldn't reach the Claude API. Check your internet connection."
+    if isinstance(e, anthropic.InternalServerError) or getattr(e, "status_code", 0) in (529,):
+        return "Claude is temporarily unavailable. Try again shortly."
+    return f"The Claude API returned an error ({type(e).__name__})."
 
 
 class Refused(RuntimeError):

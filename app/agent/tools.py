@@ -26,7 +26,11 @@ def run_sql(query: str) -> str:
         cur = conn.execute(q)
         cols = [d[0] for d in cur.description or []]
         rows = cur.fetchmany(MAX_ROWS + 1)
-    except sqlite3.Error as e:
+    except sqlite3.OperationalError as e:
+        if "interrupted" in str(e):
+            return "SQL error: query took too long and was stopped. Aggregate with GROUP BY instead of joining tables to themselves."
+        return f"SQL error: {e}"
+    except (sqlite3.Error, OverflowError, MemoryError) as e:
         return f"SQL error: {e}"
     finally:
         conn.close()
@@ -39,6 +43,12 @@ def run_sql(query: str) -> str:
     if truncated:
         lines.append(f"... truncated to {MAX_ROWS} rows; aggregate in SQL instead.")
     return "\n".join(lines) if rows else " | ".join(cols) + "\n(no rows)"
+
+
+def result_rows(out: str) -> str:
+    """The data part of a run_sql result. The header holds the model's own column expressions
+    (e.g. "sum(amount)/12.0"), and numbers the model typed itself are not evidence."""
+    return out.split("\n", 1)[1] if "\n" in out else ""
 
 
 def query_rows(query: str) -> tuple[list[str], list[tuple]]:
@@ -96,16 +106,46 @@ Text fields are privacy-redacted: [person], [phone], [acct], [email] and # repla
 The latest month may be partial."""
 
 
+def _compact_plan(p: dict) -> dict:
+    """The page needs year-by-year milestones and every category; the model doesn't. Smaller results are
+    cheaper on every later turn, because each turn re-sends the whole conversation."""
+    p = dict(p)
+    for k in ("all_cuts", "cash_flow"):
+        p.pop(k, None)
+    p["targets"] = [{**t, "milestones": [m for m in t.get("milestones", []) if m is t["milestones"][-1] or m["age"] % 5 == 0]}
+                    for t in p.get("targets", [])]
+    if "subscriptions" in p:
+        p["subscriptions"] = {**p["subscriptions"], "items": [{k: i[k] for k in ("merchant", "amount", "annual_cost", "flags") if k in i}
+                                                             for i in p["subscriptions"].get("items", [])]}
+    return p
+
+
+def _compact_goals(ov: dict) -> dict:
+    ov = dict(ov)
+    for k in ("cash_accounts", "budgets", "disclaimer", "today"):
+        ov.pop(k, None)
+    if ov.get("k401"):
+        ov["k401"] = {k: v for k, v in ov["k401"].items() if k not in ("pay_schedule", "notes")}
+    if ov.get("retirement"):
+        ov["retirement"] = {k: v for k, v in ov["retirement"].items() if k != "accounts"}
+    keep = ("category", "avg_last_3_months", "cut", "new_budget", "reasons")
+    if ov.get("plan"):
+        ov["plan"] = {**{k: v for k, v in ov["plan"].items() if k != "cash_flow"},
+                      "cuts": [{k: c[k] for k in keep if k in c} for c in ov["plan"].get("cuts", [])]}
+    ov["where_to_cut"] = [{k: c[k] for k in keep if k in c} for c in ov.get("where_to_cut", [])]
+    return ov
+
+
 def get_plan() -> str:
     from app.fire import plan
 
-    return json.dumps(redact_obj(plan() or {}), default=str)
+    return json.dumps(redact_obj(_compact_plan(plan() or {})), default=str)
 
 
 def get_goals() -> str:
     from app.planning import overview
 
-    return json.dumps(redact_obj(overview()), default=str)
+    return json.dumps(redact_obj(_compact_goals(overview())), default=str)
 
 
 def get_insights() -> str:

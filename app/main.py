@@ -48,7 +48,8 @@ async def background(label: str, fn, *args):
         cat = await categorize_pending()
         STATUS["message"] = (f"{label} done · categorized {cat['rule'] + cat['memory'] + cat['plaid'] + cat['llm']} "
                              f"({cat['llm']} by AI, ${cat['cost_usd']})" + (f" · {cat['left']} left" if cat["left"] else "")
-                             + (f" · ⚠ {', '.join(attention)} needs you to log in again (Accounts → Reconnect)" if attention else ""))
+                             + (f" · {cat['error']}" if cat.get("error") else "")
+                             + (f" · ⚠ {', '.join(attention)} needs attention (see Accounts)" if attention else ""))
     except Exception as e:
         log.exception(label)
         STATUS["message"] = f"{label} failed: {e}"
@@ -56,13 +57,20 @@ async def background(label: str, fn, *args):
         STATUS["busy"] = False
 
 
-async def daily_sync():
+async def daily_sync(first_delay: float = 60, every: float = 6 * 3600):
+    """Sync shortly after startup, then every 6 hours. Nothing in one round can stop the loop."""
+    await asyncio.sleep(first_delay)
     while True:
-        await asyncio.sleep(6 * 3600)
-        with session() as s:
-            has_items = s.exec(select(PlaidItem)).first() is not None
-        if has_items and not STATUS["busy"]:
-            await background("Scheduled Plaid sync", sources.sync_plaid)
+        try:
+            with session() as s:
+                has_items = s.exec(select(PlaidItem)).first() is not None
+            if has_items and not STATUS["busy"]:
+                await background("Scheduled Plaid sync", sources.sync_plaid)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("scheduled sync round failed; will try again")
+        await asyncio.sleep(every)
 
 
 @asynccontextmanager
@@ -182,8 +190,19 @@ def txn_category(txn_id: str, category: str = Form(...)):
 
 # ---------------- ask ----------------
 
+def spent_today() -> float:
+    start = dt.datetime.combine(dt.date.today(), dt.time.min).astimezone()  # local midnight, timezone-aware
+    with session() as s:
+        return float(s.exec(select(func.coalesce(func.sum(AgentRun.cost_usd), 0.0)).where(AgentRun.created_at >= start)).one())
+
+
 @app.post("/ask")
 async def ask(question: str = Form(...), parent: int = Form(0)):
+    cap = float((load_config().get("agent") or {}).get("daily_cost_usd", 2.0))
+    if spent_today() >= cap:
+        STATUS["message"] = (f"Today's question budget (${cap:.2f}) is used up. It resets at midnight; "
+                             "change agent.daily_cost_usd in config.yaml to raise it.")
+        return back("/runs")
     history = []
     with session() as s:
         rid = parent
@@ -207,6 +226,8 @@ def runs(request: Request):
 def run_page(request: Request, run_id: int):
     with session() as s:
         run = s.get(AgentRun, run_id)
+    if not run:
+        return HTMLResponse("Question not found.", status_code=404)
     return render(request, "run.html", run=run, charts=json.loads(run.charts or "[]"))
 
 
@@ -223,7 +244,7 @@ async def run_stream(request: Request, run_id: int):
             for st in steps:
                 last = st.idx
                 yield f"event: step\ndata: {tpl.render(st=st).replace(chr(10), ' ')}\n\n"
-            if run.status != "running":
+            if run is None or run.status != "running":
                 idle += 1
                 if idle > 1:
                     yield "event: end\ndata: end\n\n"
@@ -388,8 +409,9 @@ def login(request: Request, passcode: str = Form(...), next: str = Form("/")):
     if not ok:
         return back(f"/login?next={quote(next)}&error={quote('Wrong passcode')}")
     resp = back(next if next.startswith("/") and not next.startswith("//") else "/")
+    https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
     resp.set_cookie(security.COOKIE, security.make_session(), max_age=security.SESSION_DAYS * 86400,
-                    httponly=True, samesite="strict")
+                    httponly=True, samesite="strict", secure=https)
     return resp
 
 
@@ -451,7 +473,8 @@ def tailscale_url() -> str:
     import subprocess
     exe = shutil.which("tailscale") or "/Applications/Tailscale.app/Contents/MacOS/Tailscale"
     try:
-        st = json.loads(subprocess.run([exe, "status", "--json"], capture_output=True, text=True, timeout=3).stdout)
+        st = json.loads(subprocess.run([exe, "status", "--json"], capture_output=True, text=True, timeout=3,
+                                       env={"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", "")}).stdout)
         name = (st.get("Self") or {}).get("DNSName", "").rstrip(".")
         return f"https://{name}" if name else ""
     except Exception:

@@ -159,6 +159,7 @@ class AgentRun(SQLModel, table=True):
     charts: str = "[]"  # JSON list of {title, kind, labels, values}
     turns: int = 0
     cost_usd: float = 0.0
+    model: str = ""  # model(s) that answered, e.g. "claude-haiku-5-5,claude-opus-5-5" after an escalation
     created_at: datetime = Field(default_factory=now)
 
 

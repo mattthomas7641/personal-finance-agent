@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import logging
 import os
 import re
 from datetime import date, datetime
@@ -14,6 +15,8 @@ from app.categorize import from_plaid, normalize, display_name
 from app.db import session
 from app.models import Account, PlaidItem, Txn
 from app.privacy import load_secret, store_secret
+
+log = logging.getLogger(__name__)
 
 # ---------------- Plaid ----------------
 
@@ -102,6 +105,11 @@ def _set_status(item_id: str, **kw) -> None:
             s.commit()
 
 
+# Plaid's own codes for "try again later" (not the user's fault, no re-login needed)
+PLAID_OUTAGE = {"INTERNAL_SERVER_ERROR", "PLANNED_MAINTENANCE", "INSTITUTION_DOWN", "INSTITUTION_NOT_RESPONDING",
+                "INSTITUTION_NOT_AVAILABLE", "RATE_LIMIT_EXCEEDED", "PRODUCT_NOT_READY"}
+
+
 def check_item_health(client, item: PlaidItem) -> str:
     """/item/get: surfaces login errors and upcoming consent expiry (common for OAuth banks)."""
     from datetime import datetime, timedelta, timezone
@@ -113,9 +121,10 @@ def check_item_health(client, item: PlaidItem) -> str:
     expires = res.get("consent_expiration_time")
     if err and err.get("error_code"):
         code = err["error_code"]
-        _set_status(item.id, status="login_required" if code in LOGIN_REQUIRED else "error", error_code=code,
+        status = "login_required" if code in LOGIN_REQUIRED else ("unavailable" if code in PLAID_OUTAGE else "error")
+        _set_status(item.id, status=status, error_code=code,
                     error_message=err.get("display_message") or err.get("error_message") or code, consent_expires=expires)
-        return "login_required" if code in LOGIN_REQUIRED else "error"
+        return status
     soon = expires is not None and expires - datetime.now(timezone.utc) < timedelta(days=EXPIRING_DAYS)
     _set_status(item.id, status="expiring" if soon else "ok", error_code="", error_message="", consent_expires=expires)
     return "expiring" if soon else "ok"
@@ -138,7 +147,7 @@ def sync_plaid() -> dict:
         stats["items"] += 1
         try:
             health = check_item_health(client, item)
-            if health in ("login_required", "error"):
+            if health in ("login_required", "error", "unavailable"):
                 stats["needs_attention"].append(item.institution or item.id)
                 continue
             for a in client.accounts_get(AccountsGetRequest(access_token=load_secret(item.access_token)))["accounts"]:
@@ -169,8 +178,21 @@ def sync_plaid() -> dict:
                         raise
         except ApiException as e:
             code, msg = _plaid_error(e)
-            _set_status(item.id, status="login_required" if code in LOGIN_REQUIRED else "error", error_code=code,
-                        error_message=msg)
+            if code in LOGIN_REQUIRED:
+                status = "login_required"
+            elif (getattr(e, "status", 0) or 0) >= 500 or code in PLAID_OUTAGE:
+                status, msg = "unavailable", "Plaid or the bank couldn't be reached. Northstar will try again on the next sync."
+            else:
+                status = "error"
+            _set_status(item.id, status=status, error_code=code, error_message=msg)
+            stats["needs_attention"].append(item.institution or item.id)
+            continue
+        except Exception as e:  # network drop, Keychain refusal, bad data: flag this bank, keep syncing the others
+            log.exception("sync failed for %s", item.institution or item.id)
+            keychain = isinstance(e, RuntimeError) and "keychain" in str(e).lower()
+            _set_status(item.id, status="error" if keychain else "unavailable", error_code=type(e).__name__,
+                        error_message=("Couldn't read this bank's access token from the Keychain. Reconnect it from Accounts."
+                                       if keychain else "Couldn't reach Plaid. Northstar will try again on the next sync."))
             stats["needs_attention"].append(item.institution or item.id)
             continue
         with session() as s:
@@ -337,7 +359,7 @@ def import_csv(text: str, account_name: str, spend_is_negative: bool | None = No
     with session() as s:
         s.merge(Account(id=acc_id, name=account_name, type="csv", source="csv"))
         for i, r in enumerate(rows):
-            tid = "csv_" + hashlib.sha1(f"{acc_id}|{r['date']}|{r['amount']}|{r['raw_name']}|{i}".encode()).hexdigest()[:16]
+            tid = "csv_" + hashlib.sha1(f"{acc_id}|{r['date']}|{r['amount']}|{r['raw_name']}|{i}".encode(), usedforsecurity=False).hexdigest()[:16]
             if not s.get(Txn, tid):
                 s.add(Txn(id=tid, account_id=acc_id, date=r["date"], amount=r["amount"], raw_name=r["raw_name"], source="csv"))
                 n += 1

@@ -4,7 +4,8 @@ models:
   agent: claude-opus-5-5          # answers questions
 agent:
   max_turns: 16
-  max_cost_usd: 0.50
+  max_cost_usd: 0.50     # per question
+  daily_cost_usd: 2.00   # all questions in a day
 budgets:            # monthly, by category
   Dining: 400
   Groceries: 600
