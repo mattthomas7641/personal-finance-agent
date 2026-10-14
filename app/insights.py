@@ -112,7 +112,8 @@ def month_summary(month: str | None = None) -> dict:
             income += -t.amount
         elif t.category not in NON_SPEND:
             spend[t.category or "Uncategorized"] += t.amount
-    budgets = load_config().get("budgets") or {}
+    from app.planning import budgets as db_budgets
+    budgets = db_budgets() or (load_config().get("budgets") or {})
     y, m = map(int, month.split("-"))
     days_in = ((date(y + (m == 12), m % 12 + 1, 1)) - date(y, m, 1)).days
     in_progress = month == date.today().strftime("%Y-%m")

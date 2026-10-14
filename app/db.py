@@ -28,6 +28,20 @@ def init_db() -> None:
         c.exec_driver_sql("DROP VIEW IF EXISTS transactions")
         c.exec_driver_sql(AGENT_VIEW)
     migrate_tokens_to_keychain()
+    seed_budgets_from_config()
+
+
+def seed_budgets_from_config() -> None:
+    from sqlmodel import select
+
+    from app.config import load_config
+    from app.models import Budget
+
+    with session() as s:
+        if s.exec(select(Budget)).first() is None:
+            for cat, lim in (load_config().get("budgets") or {}).items():
+                s.add(Budget(category=cat, monthly_limit=float(lim), source="config"))
+            s.commit()
 
 
 def migrate_tokens_to_keychain() -> None:

@@ -32,6 +32,10 @@ How to work:
   you'd otherwise do in your head: differences, percentages, averages, annualizing.
 - Use make_chart when a trend or breakdown is easier to see than read.
 - get_insights returns detected subscriptions, price increases, duplicate charges and unusual charges.
+- get_goals returns the user's 401(k) status (IRS limit, year-to-date, projected year-end, % needed to max out this
+  year and next, employer match), savings/retirement goals with required monthly amounts, 3-month cash flow,
+  where spending has room to trim, and a budget plan that frees up what the goals need. Use it for any question
+  about goals, retirement, 401(k), budgets or cutting back. Explain its numbers; don't recompute them differently.
 - Finish by calling final_answer. Every number in it must come from a tool result in this conversation;
   a checker rejects answers with unsupported numbers.
 
@@ -39,8 +43,10 @@ Answer style: lead with the direct answer, then 2-4 short supporting points. Use
 amounts or whole dollars for large totals. Say which date range you used. If the data can't answer the question,
 say so plainly.
 
-Boundaries: you can't move money, change anything, or give investment, tax or legal advice. You may point out
-spending patterns and suggest budgeting actions the user could take."""
+Boundaries: you can't move money or change anything. You may explain spending patterns, suggest budget changes,
+and say what contribution % reaches the IRS 401(k) limit or a goal's target (that's arithmetic on their numbers).
+Don't recommend specific investments, funds, Roth vs pre-tax choices, or tax strategies; say a licensed advisor
+can help with those. Mention that projections depend on the assumptions entered."""
 
 TOOL_SPECS = [
     {"name": "get_schema", "description": "Describe the transactions table, sign convention, categories and date range.",
@@ -52,6 +58,8 @@ TOOL_SPECS = [
      "strict": True, "input_schema": {"type": "object", "properties": {"expression": {"type": "string"}},
                                       "required": ["expression"], "additionalProperties": False}},
     {"name": "get_insights", "description": "Detected subscriptions (with price changes), duplicate charges and unusual charges.",
+     "strict": True, "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False}},
+    {"name": "get_goals", "description": "401(k) max-out status, savings/retirement goals, cash flow, where to cut, and a budget plan.",
      "strict": True, "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False}},
     {"name": "make_chart", "description": "Chart a 2-column query result (label, value). kind: bar or line.",
      "strict": True, "input_schema": {"type": "object", "properties": {
@@ -114,6 +122,10 @@ class FinanceAgent:
             return out, not ok
         if name == "get_insights":
             out = tools.get_insights()
+            self.evidence.append(out)
+            return out, False
+        if name == "get_goals":
+            out = tools.get_goals()
             self.evidence.append(out)
             return out, False
         if name == "make_chart":

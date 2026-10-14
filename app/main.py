@@ -21,7 +21,9 @@ from app.categorize import categorize_pending, correct
 from app.config import CATEGORIES, NON_SPEND, load_config
 from app.db import init_db, session
 from app.ingest import sources
-from app.models import Account, AgentRun, AgentStep, Outbound, PlaidItem, Rule, Txn
+from app.models import Account, AgentRun, AgentStep, Budget, Goal, Outbound, PlaidItem, Plan401k, Rule, Txn
+from app import planning
+import datetime as dt
 from app import privacy, security
 from app.config import ROOT
 import yaml
@@ -125,8 +127,12 @@ def dashboard(request: Request, month: str = ""):
     with session() as s:
         uncategorized = s.exec(select(func.count()).select_from(Txn).where(Txn.category == "")).one()
         recent = s.exec(select(AgentRun).order_by(AgentRun.id.desc()).limit(5)).all()
+    try:
+        goals_ov = planning.overview()
+    except Exception:
+        goals_ov = None
     return render(request, "dashboard.html", month=month, months=months, s=summary, ins=ins,
-                  trend=trend_items, uncategorized=uncategorized, recent=recent)
+                  trend=trend_items, uncategorized=uncategorized, recent=recent, gov=goals_ov)
 
 
 @app.get("/status", response_class=HTMLResponse)
@@ -409,6 +415,96 @@ def privacy_clear():
         s.exec(delete(Outbound))
         s.commit()
     return back("/privacy")
+
+
+# ---------------- goals & budgets ----------------
+
+def _num(v: str, default: float = 0.0) -> float:
+    try:
+        return float(str(v).replace("$", "").replace(",", "").replace("%", "").strip() or default)
+    except ValueError:
+        return default
+
+
+@app.get("/goals", response_class=HTMLResponse)
+def goals_page(request: Request, saved: str = ""):
+    with session() as s:
+        plan = s.get(Plan401k, 1) or Plan401k()
+        goals = s.exec(select(Goal).order_by(Goal.target_date)).all()
+    ov = planning.overview()
+    return render(request, "goals.html", ov=ov, plan=plan, goals=goals, saved=saved, categories=CATEGORIES,
+                  sched=planning.detect_paychecks(), today=dt.date.today())
+
+
+@app.post("/goals/401k")
+def save_401k(annual_salary: str = Form(...), contribution_pct: str = Form(...), ytd_contributed: str = Form("0"),
+              ytd_as_of: str = Form(""), match_rate_pct: str = Form("0"), match_up_to_pct: str = Form("0"),
+              has_true_up: str = Form(""), birth_year: str = Form(""), pay_frequency: str = Form("auto"),
+              marginal_tax_rate_pct: str = Form("22")):
+    with session() as s:
+        s.merge(Plan401k(
+            id=1, annual_salary=_num(annual_salary), contribution_pct=_num(contribution_pct),
+            ytd_contributed=_num(ytd_contributed), ytd_as_of=dt.date.fromisoformat(ytd_as_of) if ytd_as_of else None,
+            match_rate_pct=_num(match_rate_pct), match_up_to_pct=_num(match_up_to_pct), has_true_up=bool(has_true_up),
+            birth_year=int(birth_year) if birth_year.strip() else None, pay_frequency=pay_frequency,
+            marginal_tax_rate_pct=_num(marginal_tax_rate_pct, 22)))
+        s.commit()
+    return back("/goals?saved=401k#k401")
+
+
+@app.post("/goals/new")
+def goal_new(name: str = Form(...), kind: str = Form("savings"), target_amount: str = Form(...), target_date: str = Form(...),
+             current_amount: str = Form("0"), monthly_contribution: str = Form("0"), expected_return_pct: str = Form("5")):
+    with session() as s:
+        s.add(Goal(name=name.strip(), kind=kind if kind in ("savings", "retirement") else "savings",
+                   target_amount=_num(target_amount), target_date=dt.date.fromisoformat(target_date),
+                   current_amount=_num(current_amount), monthly_contribution=_num(monthly_contribution),
+                   expected_return_pct=_num(expected_return_pct, 5)))
+        s.commit()
+    return back("/goals#goals")
+
+
+@app.post("/goals/{gid}/update")
+def goal_update(gid: int, current_amount: str = Form(...), monthly_contribution: str = Form(...)):
+    with session() as s:
+        g = s.get(Goal, gid)
+        g.current_amount, g.monthly_contribution = _num(current_amount), _num(monthly_contribution)
+        s.add(g)
+        s.commit()
+    return back("/goals#goals")
+
+
+@app.post("/goals/{gid}/delete")
+def goal_delete(gid: int):
+    with session() as s:
+        if g := s.get(Goal, gid):
+            s.delete(g)
+            s.commit()
+    return back("/goals#goals")
+
+
+@app.post("/budgets/apply_plan")
+def budgets_apply_plan():
+    ov = planning.overview()
+    if ov["plan"]:
+        planning.apply_budgets([(c["category"], c["new_budget"]) for c in ov["plan"]["cuts"]])
+    return back("/goals?saved=budgets#plan")
+
+
+@app.post("/budgets")
+async def budgets_save(request: Request):
+    form = await request.form()
+    with session() as s:
+        for cat in CATEGORIES:
+            v = form.get(f"b_{cat}", "")
+            row = s.get(Budget, cat)
+            if str(v).strip() == "":
+                if row:
+                    s.delete(row)
+            else:
+                s.merge(Budget(category=cat, monthly_limit=_num(v), source="manual"))
+        s.commit()
+    return back("/goals?saved=budgets#budgets")
 
 
 # ---------------- rules ----------------
