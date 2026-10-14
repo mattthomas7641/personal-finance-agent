@@ -50,7 +50,7 @@ python -m evals.run qa           # 20 questions, ~$1-2
 | Categorization | run `python -m evals.run categorize` |
 | Q&A (20 questions) | run `python -m evals.run qa` — accuracy, verified rate, steps and cost per question |
 
-Plus 53 tests (`pytest`), including privacy tests (no names/phones/digits reach the model, local-only never calls the LLM, tokens only in the keychain),: SQL sandbox escapes, calculator injection, checker edge cases, CSV formats, categorization cascade, insights on planted facts, and the agent loop (including hallucination → rejection → fix) against a scripted model.
+Plus 75 tests (`pytest`), including network/passcode/CSRF tests and an offline end-to-end test,, including privacy tests (no names/phones/digits reach the model, local-only never calls the LLM, tokens only in the keychain),: SQL sandbox escapes, calculator injection, checker edge cases, CSV formats, categorization cascade, insights on planted facts, and the agent loop (including hallucination → rejection → fix) against a scripted model.
 
 ## Run it
 
@@ -64,6 +64,15 @@ Open http://localhost:8766 → **Accounts**:
 - **Sandbox** (`PLAID_ENV=sandbox`): *Add a sandbox test bank* for realistic fake data.
 - **Your real accounts** (`PLAID_ENV=production`, needs Plaid Production or trial access): *Connect a real bank* opens Plaid Link; syncs every 6 hours while running.
 - **Any bank, today**: download your activity as CSV and import it.
+
+## On your phone
+
+Runs on your Mac; your iPhone reaches it privately over [Tailscale](https://tailscale.com) (free) and installs it to the home screen.
+
+- **Private network only.** The server listens on localhost; `tailscale serve --bg 8766` exposes it over HTTPS to your own devices only. Requests from anything else are refused, and DNS-rebinding / cross-site requests are blocked.
+- **Passcode** for every device except the Mac itself (PBKDF2 hash, signed 30-day sessions, lockout after repeated wrong guesses). It can only be changed from the Mac.
+- **Works when the Mac is off.** A service worker keeps the pages you've opened (refreshing the main ones in the background) and shows them with a *"Mac offline · data from 3h ago"* banner; actions that need the Mac are disabled. Signing out deletes the saved copies. Tested end to end in headless Chromium.
+- **Auto-start:** `scripts/install-autostart.sh` runs it at login via launchd.
 
 ## Layout
 

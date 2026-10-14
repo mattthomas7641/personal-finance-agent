@@ -16,9 +16,9 @@
 </div>
 
 <div class="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
-  <div class="card p-4"><div class="text-xs text-zinc-500">Spent {% if s.partial %}(so far){% endif %}</div><div class="text-lg sm:text-2xl font-semibold num mt-1">{{ s.spend|money }}</div></div>
-  <div class="card p-4"><div class="text-xs text-zinc-500">Income</div><div class="text-lg sm:text-2xl font-semibold num mt-1">{{ s.income|money }}</div></div>
-  <div class="card p-4"><div class="text-xs text-zinc-500">Net</div><div class="text-lg sm:text-2xl font-semibold num mt-1 {{ 'text-emerald-700' if s.net >= 0 else 'text-red-700' }}">{{ s.net|money }}</div></div>
+  <div class="card p-3 sm:p-4"><div class="text-xs text-zinc-500">Spent {% if s.partial %}(so far){% endif %}</div><div class="text-[15px] sm:text-2xl font-semibold num mt-1 tracking-tight">{{ s.spend|money }}</div></div>
+  <div class="card p-3 sm:p-4"><div class="text-xs text-zinc-500">Income</div><div class="text-[15px] sm:text-2xl font-semibold num mt-1 tracking-tight">{{ s.income|money }}</div></div>
+  <div class="card p-3 sm:p-4"><div class="text-xs text-zinc-500">Net</div><div class="text-[15px] sm:text-2xl font-semibold num mt-1 tracking-tight {{ 'text-emerald-700' if s.net >= 0 else 'text-red-700' }}">{{ s.net|money }}</div></div>
 </div>
 
 <div class="grid lg:grid-cols-5 gap-4">

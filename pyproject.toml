@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = ["anthropic>=1.13", "plaid-python>=45", "fastapi", "uvicorn[standard]", "sqlmodel", "jinja2", "pyyaml", "python-multipart", "httpx", "keyring"]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "playwright"]
 
 [build-system]
 requires = ["setuptools>=68"]
