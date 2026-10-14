@@ -33,17 +33,27 @@
 </div>
 
 {% if items %}
-<div class="card p-5 mt-4">
+<div id="banks" class="card p-5 mt-4">
   <h2 class="font-semibold mb-1">Connected banks</h2>
   <p class="text-sm text-zinc-600 mb-3">Each bank login is one Plaid "Item"{% if plaid_env == "production" %} (billed about $0.30/month){% endif %}. Disconnecting tells Plaid to stop access, which ends the charge, and deletes the stored token.</p>
   {% for it in items %}
-    <form method="post" action="/connect/{{ it.id }}/disconnect" class="flex flex-wrap items-center gap-3 border-t border-zinc-100 py-2"
-          onsubmit="return confirm('Disconnect {{ (it.institution or 'this bank')|e }}? Plaid will stop syncing it.')">
-      <span class="text-sm font-medium flex-1">{{ it.institution or "Bank" }} <span class="pill">{{ it.env }}</span>
-        <span class="text-zinc-400 font-normal">· connected {{ it.created_at.strftime("%b %d, %Y") }}</span></span>
-      <label class="text-xs text-zinc-600 flex items-center gap-1"><input type="checkbox" name="keep_history" value="1" checked> keep past transactions</label>
-      <button class="btn">Disconnect</button>
-    </form>
+    <div class="border-t border-zinc-100 py-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-sm font-medium flex-1">{{ it.institution or "Bank" }} <span class="pill">{{ it.env }}</span>
+          {% if it.status == "ok" %}<span class="pill !bg-emerald-100 !text-emerald-800">syncing</span>
+          {% elif it.status == "expiring" %}<span class="pill !bg-amber-100 !text-amber-800">expires {{ it.consent_expires.strftime("%b %d") if it.consent_expires else "soon" }}</span>
+          {% elif it.status == "login_required" %}<span class="pill !bg-red-100 !text-red-800">needs login</span>
+          {% else %}<span class="pill !bg-red-100 !text-red-800">error</span>{% endif %}
+          <span class="text-zinc-400 font-normal text-xs">· last synced {{ it.last_synced.strftime("%b %d, %H:%M") if it.last_synced else "never" }}</span></span>
+        {% if it.status != "ok" %}<button type="button" class="btn btn-primary" onclick="reconnect('{{ it.id }}')">Reconnect</button>{% endif %}
+        <form method="post" action="/connect/{{ it.id }}/disconnect" class="flex items-center gap-2"
+              onsubmit="return confirm('Disconnect {{ (it.institution or 'this bank')|e }}? Plaid will stop syncing it.')">
+          <label class="text-xs text-zinc-600 flex items-center gap-1"><input type="checkbox" name="keep_history" value="1" checked> keep history</label>
+          <button class="btn">Disconnect</button>
+        </form>
+      </div>
+      {% if it.error_message and it.status != "ok" %}<p class="text-xs text-zinc-500 mt-1">{{ it.error_message }}</p>{% endif %}
+    </div>
   {% endfor %}
 </div>
 {% endif %}
@@ -64,6 +74,12 @@
 
 <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
 <script>
+async function reconnect(itemId) {   // Plaid Link in update mode: log in again, same bank, same history
+  const r = await fetch('/api/link_token?item_id=' + encodeURIComponent(itemId), {method: 'POST'}).then(r => r.json());
+  if (r.error) { alert(r.error); return; }
+  Plaid.create({token: r.link_token,
+    onSuccess: async () => { await fetch('/api/reconnected/' + encodeURIComponent(itemId), {method: 'POST'}); location.reload(); }}).open();
+}
 document.getElementById('link')?.addEventListener('click', async () => {
   const r = await fetch('/api/link_token', {method: 'POST'}).then(r => r.json());
   if (r.error) { alert(r.error); return; }

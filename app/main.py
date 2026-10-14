@@ -39,10 +39,14 @@ async def background(label: str, fn, *args):
     STATUS.update(busy=True, message=f"{label}…")
     try:
         res = await asyncio.to_thread(fn, *args) if not asyncio.iscoroutinefunction(fn) else await fn(*args)
+        attention = res.get("needs_attention") if isinstance(res, dict) else None
+        if isinstance(res, dict) and "added" in res:
+            res = f"{res['added']} new, {res['modified']} updated, {res['removed']} removed"
         STATUS["message"] = f"{label}: {res}. Categorizing…"
         cat = await categorize_pending()
         STATUS["message"] = (f"{label} done · categorized {cat['rule'] + cat['memory'] + cat['plaid'] + cat['llm']} "
-                             f"({cat['llm']} by AI, ${cat['cost_usd']})" + (f" · {cat['left']} left" if cat["left"] else ""))
+                             f"({cat['llm']} by AI, ${cat['cost_usd']})" + (f" · {cat['left']} left" if cat["left"] else "")
+                             + (f" · ⚠ {', '.join(attention)} needs you to log in again (Accounts → Reconnect)" if attention else ""))
     except Exception as e:
         log.exception(label)
         STATUS["message"] = f"{label} failed: {e}"
@@ -133,7 +137,9 @@ def dashboard(request: Request, month: str = ""):
         goals_ov = planning.overview()
     except Exception:
         goals_ov = None
-    return render(request, "dashboard.html", month=month, months=months, s=summary, ins=ins,
+    with session() as s:
+        attention = s.exec(select(PlaidItem).where(PlaidItem.status != "ok")).all()
+    return render(request, "dashboard.html", month=month, months=months, s=summary, ins=ins, attention=attention,
                   trend=trend_items, uncategorized=uncategorized, recent=recent, gov=goals_ov)
 
 
@@ -237,8 +243,10 @@ def connect(request: Request, error: str = ""):
 
 
 @app.post("/api/link_token")
-def link_token():
+def link_token(item_id: str = ""):
     try:
+        if item_id:  # update mode: log in again to an existing bank
+            return {"link_token": sources.create_update_link_token(item_id)}
         return {"link_token": sources.create_link_token()}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
@@ -251,6 +259,13 @@ async def exchange(request: Request):
         sources.exchange_public_token(body["public_token"], body.get("institution", ""))
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
+    asyncio.create_task(background("Plaid sync", sources.sync_plaid))
+    return {"ok": True}
+
+
+@app.post("/api/reconnected/{item_id}")
+async def reconnected(item_id: str):
+    sources.mark_reconnected(item_id)
     asyncio.create_task(background("Plaid sync", sources.sync_plaid))
     return {"ok": True}
 

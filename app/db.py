@@ -24,11 +24,31 @@ def init_db() -> None:
     from app import models  # noqa: F401
 
     SQLModel.metadata.create_all(engine)
+    add_missing_columns()
     with engine.begin() as c:
         c.exec_driver_sql("DROP VIEW IF EXISTS transactions")
         c.exec_driver_sql(AGENT_VIEW)
     migrate_tokens_to_keychain()
     seed_budgets_from_config()
+
+
+def add_missing_columns() -> None:
+    """create_all() doesn't alter existing tables; add any new model columns so older databases keep working."""
+    from sqlalchemy import inspect
+
+    insp = inspect(engine)
+    with engine.begin() as c:
+        for table in SQLModel.metadata.sorted_tables:
+            if not insp.has_table(table.name):
+                continue
+            have = {col["name"] for col in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name not in have:
+                    ddl = col.type.compile(engine.dialect)
+                    default = col.default.arg if col.default is not None and not callable(col.default.arg) else None
+                    clause = f" DEFAULT {default!r}" if isinstance(default, (str, int, float)) and not isinstance(default, bool) else (
+                        f" DEFAULT {int(default)}" if isinstance(default, bool) else "")
+                    c.exec_driver_sql(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl}{clause}')
 
 
 def seed_budgets_from_config() -> None:
