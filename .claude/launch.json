@@ -1,7 +1,0 @@
-{
-  "version": "0.0.1",
-  "configurations": [
-    {"name": "ledger-demo", "runtimeExecutable": "env", "runtimeArgs": ["LEDGER_DATA=/private/tmp/claude-501/ledger-demo", ".venv/bin/uvicorn", "app.main:app", "--port", "8766"], "port": 8766},
-    {"name": "ledger", "runtimeExecutable": ".venv/bin/uvicorn", "runtimeArgs": ["app.main:app", "--port", "8766"], "port": 8766}
-  ]
-}
