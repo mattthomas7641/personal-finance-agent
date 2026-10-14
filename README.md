@@ -1,6 +1,6 @@
-# ledger-agent
+# Northstar (Personal Finance Agent)
 
-A personal finance agent you can actually trust with numbers. Connect your banks (Plaid) or import CSVs, then ask questions in plain English — *"Why was my spending higher last month?"*, *"What am I paying for subscriptions per year?"* — and get answers where **every number is verified against your data before you see it**.
+A personal finance agent you can actually trust with numbers, built to keep you pointed at your goals. Connect your banks (Plaid) or import CSVs, then ask questions in plain English — *"Why was my spending higher last month?"*, *"What am I paying for subscriptions per year?"* — and get answers where **every number is verified against your data before you see it**.
 
 LLMs are bad at arithmetic and happy to make up figures. This agent can't: it answers by running read-only SQL and a calculator, and a deterministic **number checker** rejects any answer containing a figure that didn't come from a tool result. Rejected answers go back to the agent to fix.
 
