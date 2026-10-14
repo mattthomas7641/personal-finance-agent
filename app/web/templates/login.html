@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-sm mx-auto mt-10">
+  <div class="flex justify-center mb-4"><img src="/static/icon-180.png" class="w-16 h-16 rounded-2xl" alt=""></div>
+  <h1 class="text-xl font-semibold text-center mb-1">ledger-agent</h1>
+  <p class="text-sm text-zinc-500 text-center mb-5">Enter your passcode</p>
+  {% if error %}<div class="mb-3 text-sm text-red-800 bg-red-50 rounded-lg p-3 text-center">{{ error }}</div>{% endif %}
+  <form method="post" action="/login" class="space-y-3">
+    <input type="hidden" name="next" value="{{ next }}">
+    <input type="password" name="passcode" required autofocus autocomplete="current-password" class="field text-center" placeholder="Passcode">
+    <button class="btn btn-primary w-full">Unlock</button>
+  </form>
+</div>
+{% endblock %}

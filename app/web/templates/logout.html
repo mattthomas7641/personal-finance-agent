@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-sm mx-auto mt-10 text-center">
+  <h1 class="text-lg font-semibold mb-2">Signed out</h1>
+  <p class="text-sm text-zinc-600 mb-4">Saved offline copies on this device were deleted.</p>
+  <a href="/login" class="btn btn-primary">Sign in again</a>
+</div>
+<script>
+  caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+  navigator.serviceWorker?.controller?.postMessage("clear");
+</script>
+{% endblock %}

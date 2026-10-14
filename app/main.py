@@ -10,7 +10,8 @@ from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import delete, func, select
 
@@ -21,7 +22,7 @@ from app.config import CATEGORIES, NON_SPEND, load_config
 from app.db import init_db, session
 from app.ingest import sources
 from app.models import Account, AgentRun, AgentStep, Outbound, PlaidItem, Rule, Txn
-from app import privacy
+from app import privacy, security
 from app.config import ROOT
 import yaml
 
@@ -64,7 +65,29 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="ledger-agent", lifespan=lifespan)
-templates = Jinja2Templates(directory=str(Path(__file__).parent / "web" / "templates"))
+WEB = Path(__file__).parent / "web"
+templates = Jinja2Templates(directory=str(WEB / "templates"))
+app.mount("/static", StaticFiles(directory=str(WEB / "static")), name="static")
+PUBLIC = ("/static/", "/manifest.webmanifest", "/sw.js", "/login")
+
+
+@app.middleware("http")
+async def access_guard(request: Request, call_next):
+    """Only this Mac and your Tailscale devices; non-local clients also need the passcode."""
+    host = request.client.host if request.client else None
+    if not security.is_allowed_network(host):
+        return PlainTextResponse("Forbidden: only this Mac and your Tailscale devices can open ledger-agent.", status_code=403)
+    path = request.url.path
+    if security.is_local(host) or path.startswith(PUBLIC):
+        return await call_next(request)
+    if not security.has_passcode():
+        return HTMLResponse("<meta name=viewport content='width=device-width'><p style='font:16px system-ui;padding:24px'>"
+                            "Set a passcode first: open ledger-agent on your Mac → Privacy → Phone access.</p>", status_code=403)
+    if not security.valid_session(request.cookies.get(security.COOKIE)):
+        if request.method != "GET" or path.startswith("/api/") or path.endswith("/stream"):
+            return PlainTextResponse("Login required", status_code=401)
+        return RedirectResponse(f"/login?next={quote(str(request.url.path))}", status_code=303)
+    return await call_next(request)
 templates.env.filters["money"] = lambda v: "" if v is None else (f"-${abs(v):,.2f}" if v < 0 else f"${v:,.2f}")
 
 
@@ -279,10 +302,67 @@ async def recategorize(ai: int = Form(0)):
     return back("/privacy" if ai else "/connect")
 
 
+# ---------------- phone: login, PWA ----------------
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request, next: str = "/", error: str = ""):
+    return render(request, "login.html", next=next if next.startswith("/") else "/", error=error)
+
+
+@app.post("/login")
+def login(request: Request, passcode: str = Form(...), next: str = Form("/")):
+    client = request.client.host if request.client else "?"
+    try:
+        ok = security.check_passcode(passcode, client)
+    except PermissionError as e:
+        return back(f"/login?error={quote(str(e))}")
+    if not ok:
+        return back(f"/login?next={quote(next)}&error={quote('Wrong passcode')}")
+    resp = back(next if next.startswith("/") and not next.startswith("//") else "/")
+    resp.set_cookie(security.COOKIE, security.make_session(), max_age=security.SESSION_DAYS * 86400,
+                    httponly=True, samesite="strict")
+    return resp
+
+
+@app.get("/logout")
+def logout(request: Request):
+    resp = render(request, "logout.html")
+    resp.delete_cookie(security.COOKIE)
+    return resp
+
+
+@app.post("/security/passcode")
+def set_passcode(request: Request, passcode: str = Form(...), confirm: str = Form(...)):
+    if not security.is_local(request.client.host if request.client else None):
+        return PlainTextResponse("Change the passcode from the Mac itself.", status_code=403)
+    if passcode != confirm:
+        return back(f"/privacy?error={quote('Passcodes did not match')}#phone")
+    try:
+        security.set_passcode(passcode)
+    except ValueError as e:
+        return back(f"/privacy?error={quote(str(e))}#phone")
+    return back("/privacy?saved=passcode#phone")
+
+
+@app.get("/manifest.webmanifest")
+def manifest():
+    return JSONResponse({
+        "name": "ledger-agent", "short_name": "Ledger", "start_url": "/", "scope": "/", "display": "standalone",
+        "background_color": "#fafafa", "theme_color": "#18181b",
+        "icons": [{"src": "/static/icon-180.png", "sizes": "180x180", "type": "image/png"},
+                  {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png"}],
+    }, media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+def service_worker():
+    return FileResponse(WEB / "static" / "sw.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+
 # ---------------- privacy ----------------
 
 @app.get("/privacy", response_class=HTMLResponse)
-def privacy_page(request: Request):
+def privacy_page(request: Request, error: str = "", saved: str = ""):
     cfg = load_config().get("privacy") or {}
     with session() as s:
         log = s.exec(select(Outbound).order_by(Outbound.id.desc()).limit(60)).all()
@@ -292,7 +372,19 @@ def privacy_page(request: Request):
         uncategorized = s.exec(select(func.count()).select_from(Txn).where(Txn.category == "")).one()
     changed = [(r, privacy.redact(r)) for r in samples if privacy.redact(r) != " ".join(r.split())][:25]
     return render(request, "privacy.html", mode=cfg.get("mode", "standard"), terms=cfg.get("redact_terms") or [],
-                  log=log, sent_chars=sent_chars, changed=changed, uncategorized=uncategorized)
+                  log=log, sent_chars=sent_chars, changed=changed, uncategorized=uncategorized, error=error, saved=saved,
+                  has_passcode=security.has_passcode(), is_local=security.is_local(request.client.host if request.client else None),
+                  tailscale_ip=tailscale_ip())
+
+
+def tailscale_ip() -> str:
+    import shutil
+    import subprocess
+    exe = shutil.which("tailscale") or "/Applications/Tailscale.app/Contents/MacOS/Tailscale"
+    try:
+        return subprocess.run([exe, "ip", "-4"], capture_output=True, text=True, timeout=3).stdout.strip().splitlines()[0]
+    except Exception:
+        return ""
 
 
 @app.post("/privacy")

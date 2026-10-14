@@ -1,34 +1,65 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{% block title %}ledger-agent{% endblock %}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Ledger">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#ffffff">
+  <script src="/static/tailwind.js"></script>
+  <script src="/static/htmx.min.js"></script>
+  <script src="/static/chart.umd.min.js"></script>
   <style>
-    .btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .8rem;border-radius:.5rem;font-size:.875rem;font-weight:500;border:1px solid #d4d4d8;background:#fff}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;padding:.55rem .9rem;border-radius:.6rem;font-size:.875rem;font-weight:500;border:1px solid #d4d4d8;background:#fff}
     .btn:hover{background:#f4f4f5} .btn-primary{background:#18181b;color:#fff;border-color:#18181b} .btn-primary:hover{background:#27272a}
-    .card{background:#fff;border:1px solid #e4e4e7;border-radius:.75rem}
-    .pill{display:inline-block;padding:.1rem .5rem;border-radius:999px;font-size:.75rem;font-weight:500;background:#f4f4f5;color:#3f3f46}
-    .field{width:100%;border:1px solid #d4d4d8;border-radius:.5rem;padding:.5rem .65rem;font-size:.875rem;background:#fff}
+    .btn:disabled{opacity:.45}
+    .card{background:#fff;border:1px solid #e4e4e7;border-radius:.9rem}
+    .pill{display:inline-block;padding:.15rem .55rem;border-radius:999px;font-size:.75rem;font-weight:500;background:#f4f4f5;color:#3f3f46}
+    .field{width:100%;border:1px solid #d4d4d8;border-radius:.6rem;padding:.55rem .7rem;font-size:16px;background:#fff}
+    @media (min-width:640px){.field{font-size:.875rem}}
     .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace} .pre{white-space:pre-wrap}
     .num{font-variant-numeric:tabular-nums}
+    .safe-bottom{padding-bottom:calc(env(safe-area-inset-bottom) + .25rem)}
+    body{-webkit-tap-highlight-color:transparent}
   </style>
 </head>
 <body class="bg-zinc-50 text-zinc-900">
-  <header class="border-b border-zinc-200 bg-white">
+  {% set path = request.url.path if request else "/" %}
+  <header class="border-b border-zinc-200 bg-white" style="padding-top:env(safe-area-inset-top)">
     <nav class="max-w-6xl mx-auto px-4 h-14 flex items-center gap-6 text-sm">
       <a href="/" class="font-semibold tracking-tight">ledger-agent</a>
-      <a href="/" class="text-zinc-600 hover:text-zinc-900">Overview</a>
-      <a href="/transactions" class="text-zinc-600 hover:text-zinc-900">Transactions</a>
-      <a href="/runs" class="text-zinc-600 hover:text-zinc-900">Questions</a>
-      <a href="/rules" class="text-zinc-600 hover:text-zinc-900">Rules</a>
-      <a href="/privacy" class="text-zinc-600 hover:text-zinc-900 ml-auto">Privacy</a>
-      <a href="/connect" class="text-zinc-600 hover:text-zinc-900">Accounts</a>
+      <a href="/" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Overview</a>
+      <a href="/transactions" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Transactions</a>
+      <a href="/runs" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Questions</a>
+      <a href="/rules" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Rules</a>
+      <a href="/privacy" class="hidden sm:inline text-zinc-600 hover:text-zinc-900 ml-auto">Privacy</a>
+      <a href="/connect" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Accounts</a>
+      <a href="/privacy" class="sm:hidden ml-auto text-zinc-500 text-sm">Settings</a>
     </nav>
   </header>
-  {% if status.message %}<div class="max-w-6xl mx-auto px-4 pt-4">{% include "_status.html" %}</div>{% endif %}
-  <main class="max-w-6xl mx-auto px-4 py-6">{% block content %}{% endblock %}</main>
+  {% if status and status.message %}<div class="max-w-6xl mx-auto px-4 pt-4">{% include "_status.html" %}</div>{% endif %}
+  <main class="max-w-6xl mx-auto px-4 py-5 pb-28 sm:pb-6">{% block content %}{% endblock %}</main>
+
+  <nav class="sm:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-zinc-200 safe-bottom z-40">
+    <div class="grid grid-cols-4 text-[11px] text-center">
+      {% for href, label, icon in [("/", "Overview", "M3 12l9-8 9 8M5 10v10h14V10"), ("/transactions", "Activity", "M4 6h16M4 12h16M4 18h10"),
+                                   ("/runs", "Ask", "M8 10h8M8 14h5M21 12a9 9 0 1 1-4-7.5L21 3v6h-6"), ("/connect", "Accounts", "M3 10h18M5 10V20h14V10M12 3l9 5H3z")] %}
+        <a href="{{ href }}" class="flex flex-col items-center gap-0.5 pt-2 pb-1 {{ 'text-zinc-900 font-medium' if path == href else 'text-zinc-500' }}">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{ icon }}"/></svg>{{ label }}</a>
+      {% endfor %}
+    </div>
+  </nav>
+
+  <script>
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
+    if (window.LEDGER_OFFLINE) {
+      document.querySelectorAll("form button, form input, form select, form textarea, [hx-post]").forEach(el => el.disabled = true);
+      document.querySelectorAll("[hx-get][hx-trigger*=every]").forEach(el => el.removeAttribute("hx-trigger"));
+    }
+  </script>
 </body>
 </html>
