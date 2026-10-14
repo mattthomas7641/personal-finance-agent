@@ -86,6 +86,10 @@ Runs on your Mac; your iPhone reaches it privately over [Tailscale](https://tail
 - Credit card rewards: track points per card, earn rate by category, and which card to use where.
 - Plaid Investments: read 401(k) contributions directly instead of from your pay stub.
 
+## Security & privacy policy
+
+See [SECURITY.md](SECURITY.md) and the [privacy policy](https://mattthomas7641.github.io/northstar/privacy.html).
+
 ## Layout
 
 ```
