@@ -2,9 +2,12 @@
 {% from "_ui.html" import page_header, badge, alert, icon, I, saved_toast %}
 {% block title %}Plan · Northstar{% endblock %}
 {% block content %}
+{% if imported %}{% call alert("ok", "mb-4") %}{{ imported }}{% endcall %}{% endif %}
+{% if error %}{% call alert("bad", "mb-4") %}{{ error }}{% endcall %}{% endif %}
+
 {% if not p or p.needs %}
   {% call page_header("Plan", "What it takes to retire when you want to.") %}{% endcall %}
-  <section class="panel max-w-2xl">
+  <section class="panel max-w-2xl mb-6">
     <div class="panel-h"><h2>Set your retirement target</h2></div>
     <div class="panel-b"><p class="text-[13px] c-muted">Add your birth year and how much you want invested by the time you retire. Northstar works out the monthly numbers from there.</p>
       {% include "_plan_settings.html" %}</div>
@@ -12,143 +15,185 @@
 {% else %}
 {% set t0 = p.targets[0] %}{% set tl = p.targets[-1] %}{% set two = p.targets|length > 1 %}
 {% set tone = {"Realistic": "ok", "Aggressive": "warn"}.get(t0.rating, "bad") %}
+{% set ms = t0.milestones[0] if t0.milestones else none %}
 
-{% call page_header("Retire at " ~ p.target_age, "Target " ~ (t0.target|money0) ~ ((" to " ~ (tl.target|money0)) if two else "") ~ " invested · you're " ~ (p.age|round(1)) ~ ", " ~ p.months ~ " months to go") %}
+{% call page_header("Plan", "Retire at " ~ p.target_age ~ " · age " ~ (p.age|int) ~ " · " ~ (p.months|duration) ~ " to go") %}
   {{ saved_toast(saved) }}
-  <a href="#settings" class="btn" onclick="document.getElementById('settings').open = true">Edit target</a>
+  <a href="#settings" class="btn" onclick="document.getElementById('settings').open = true">Edit target and assumptions</a>
 {% endcall %}
 
-{% call alert(tone, "mb-5") %}<b class="font-semibold">{{ t0.rating }}.</b> {{ t0.why }}
-  At your current pace you'll have {{ t0.projected_current_pace|money0 }} at {{ p.target_age }}.{% endcall %}
-
-<section class="panel kpis mb-5" style="--n: 4">
-  <div class="kpi"><div class="stat-l">Invest more</div><div class="stat-v">{{ t0.extra_monthly|money0 }}<span class="text-[14px] font-normal c-muted">/mo</span></div>
-    <div class="stat-s">Needs {{ t0.required_monthly|money0 }}/mo, you invest {{ t0.investing_now|money0 }}</div></div>
-  <div class="kpi"><div class="stat-l">Cut spending by</div><div class="stat-v {{ 'c-bad' if not t0.feasible }}">{{ t0.spending_cut|money0 }}<span class="text-[14px] font-normal c-muted">/mo</span></div>
-    <div class="stat-s">{{ t0.spending_cut_pct }}% of spending · max realistic {{ p.max_realistic_cut|money0 }}</div></div>
-  <div class="kpi"><div class="stat-l">Savings rate needed</div><div class="stat-v c-{{ tone }}">{{ t0.savings_rate_needed if t0.savings_rate_needed < 100 else ">100" }}%</div>
-    <div class="stat-s">Over 50% is hard to sustain</div></div>
-  <div class="kpi"><div class="stat-l">Invested today</div><div class="stat-v">{{ p.invested|money0 }}</div>
-    <div class="stat-s">{{ (p.invested / t0.target * 100)|round(1) if t0.target else 0 }}% of {{ t0.target|money0 }}</div></div>
+<section class="hero">
+  <div>
+    <div class="hero-l">To have {{ t0.target|money0 }}{% if two %}–{{ tl.target|money0 }}{% endif %} invested at {{ p.target_age }}, invest</div>
+    <div class="hero-v">{{ t0.required_monthly|money0 }}<span class="text-[18px] font-medium c-muted"> a month</span></div>
+    <div class="hero-s"><span class="c-{{ tone }} font-medium">{{ t0.rating }}.</span> {{ t0.why }} You invest {{ t0.investing_now|money0 }} a month now.</div>
+  </div>
+  <div class="hero-side">
+    <div><div class="stat-l">Invested</div><div class="stat-v">{{ p.invested|money0 }}</div>
+      <div class="stat-s">{% if ms %}Should be {{ ms.need|money0 }} by {{ ms.age }}{% endif %}</div></div>
+    <div><div class="stat-l">Invest more</div><div class="stat-v">{{ t0.extra_monthly|money0 }}</div><div class="stat-s">a month</div></div>
+    <div><div class="stat-l">Cut spending by</div><div class="stat-v {{ 'c-bad' if not t0.feasible }}">{{ t0.spending_cut|money0 }}</div>
+      <div class="stat-s">{% if t0.feasible %}a month{% else %}more than the {{ p.max_realistic_cut|money0 }} you can cut{% endif %}</div></div>
+  </div>
 </section>
 
-<div class="grid lg:grid-cols-5 gap-5 mb-5">
-  <section class="panel lg:col-span-3 min-w-0">
-    <div class="panel-h"><h2>What it takes</h2><span class="meta">Per month · last 3 months of data</span></div>
-    <table class="tbl">
-      <thead><tr><th></th>{% for t in p.targets %}<th class="r">{{ t.target|money0 }}</th>{% endfor %}</tr></thead>
-      <tbody>
-        <tr><td>Needs invested</td>{% for t in p.targets %}<td class="r">{{ t.required_monthly|money0 }}</td>{% endfor %}</tr>
-        <tr><td class="c-muted">You invest now</td>{% for t in p.targets %}<td class="r c-muted">−{{ t.investing_now|money0 }}</td>{% endfor %}</tr>
-        <tr><td class="font-semibold">Invest more</td>{% for t in p.targets %}<td class="r font-semibold">{{ t.extra_monthly|money0 }}</td>{% endfor %}</tr>
-        <tr><td class="c-muted">From leftover cash ({{ p.surplus|money0 }})</td>{% for t in p.targets %}<td class="r c-muted">−{{ t.from_surplus|money0 }}</td>{% endfor %}</tr>
-        <tr><td class="font-semibold">Cut spending by</td>{% for t in p.targets %}<td class="r font-semibold {{ 'c-bad' if not t.feasible }}">{{ t.spending_cut|money0 }}</td>{% endfor %}</tr>
-        <tr><td>Savings rate needed</td>{% for t in p.targets %}<td class="r">{{ t.savings_rate_needed if t.savings_rate_needed < 100 else ">100" }}%</td>{% endfor %}</tr>
-        <tr><td>Verdict</td>{% for t in p.targets %}<td class="r">{{ badge(t.rating.replace(" on current income", ""), {"Realistic": "ok", "Aggressive": "warn"}.get(t.rating, "bad")) }}</td>{% endfor %}</tr>
-      </tbody>
-      <thead><tr><th colspan="{{ p.targets|length + 1 }}">If you went all in at {{ p.feasible_monthly|money0 }}/mo</th></tr></thead>
-      <tbody>
-        <tr><td>Reach the goal at</td>{% for t in p.targets %}<td class="r">{{ ("age " ~ t.alternatives.retire_at_age) if t.alternatives.retire_at_age else "after 70" }}</td>{% endfor %}</tr>
-        <tr><td>Have at {{ p.target_age }}</td>{% for t in p.targets %}<td class="r">{{ t.alternatives.reachable_by_target_age|money0 }}</td>{% endfor %}</tr>
-        <tr><td>Extra pay a year, on time</td>{% for t in p.targets %}<td class="r">{{ t.alternatives.extra_income_yearly_pretax|money0 if t.alternatives.extra_income_yearly_pretax else "None" }}</td>{% endfor %}</tr>
-        <tr><td>Return needed, on time</td>{% for t in p.targets %}<td class="r">{{ (t.alternatives.return_needed_pct ~ "%") if t.alternatives.return_needed_pct is not none else "—" }}</td>{% endfor %}</tr>
-      </tbody>
-    </table>
-  </section>
-
-  <section class="panel lg:col-span-2 min-w-0">
-    <div class="panel-h"><h2>Recommendations</h2><span class="meta">Updates with your data</span></div>
-    <ol class="text-[13.5px]">
-      {% for r in p.recommendations %}
-        <li class="flex gap-3 px-4 py-3 border-b border-[var(--line-soft)] last:border-0"><span class="num c-muted w-4 shrink-0 text-right">{{ loop.index }}</span><span>{{ r }}</span></li>
-      {% endfor %}
+<div class="grid lg:grid-cols-5 gap-x-8 gap-y-6 mb-6">
+  <section class="lg:col-span-3 min-w-0">
+    <div class="section-h"><h2>What to change</h2><span class="meta">Updates with your data</span></div>
+    <ol class="list">
+      {% for r in p.recommendations %}<li class="!justify-start !items-start text-[14px]"><span class="num c-muted w-4 shrink-0 text-right">{{ loop.index }}</span><span>{{ r }}</span></li>{% endfor %}
     </ol>
   </section>
+  <section class="lg:col-span-2 panel min-w-0" id="whatif">
+    <div class="panel-h"><h2>What if</h2><span class="meta">Try a change; nothing is saved</span></div>
+    <form class="panel-b grid grid-cols-2 gap-3" hx-get="/plan/whatif" hx-target="#whatif-out" hx-trigger="load, input delay:300ms">
+      <label class="lbl">Retire at<input name="retire_age" type="number" min="30" max="80" class="field" value="{{ p.target_age }}"></label>
+      <label class="lbl">Invest a month ($)<input name="monthly" type="number" min="0" step="any" class="field" value="{{ t0.investing_now|round|int }}"></label>
+      <label class="lbl">Return after inflation %<input name="return_pct" type="number" min="0" max="15" step="any" class="field" value="{{ p.return_pct }}"></label>
+      <label class="lbl">Target ($)<input name="target" type="number" min="0" step="any" class="field" value="{{ t0.target|int }}"></label>
+    </form>
+    <div id="whatif-out" class="px-4 pb-4"></div>
+  </section>
 </div>
 
-<section class="panel mb-5">
+<section class="panel mb-6">
   <div class="panel-h flex-wrap"><h2>Invested balance by age</h2>
     <div class="flex flex-wrap gap-x-4 gap-y-1 text-[12px] c-muted">
-      <span class="flex items-center gap-1.5"><svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="#101828" stroke-width="2"/></svg>Needed for {{ t0.target|money0 }}</span>
+      <span class="flex items-center gap-1.5"><svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="#101828" stroke-width="2"/></svg>Needed</span>
       <span class="flex items-center gap-1.5"><svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="#2451c7" stroke-width="2"/></svg>All in</span>
       <span class="flex items-center gap-1.5"><svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="#dc6803" stroke-width="2" stroke-dasharray="4 3"/></svg>Current pace</span>
+      {% if history %}<span class="flex items-center gap-1.5"><svg width="8" height="8"><circle cx="4" cy="4" r="3.5" fill="#12b76a"/></svg>Actual</span>{% endif %}
     </div></div>
   <div class="panel-b"><div class="relative h-60 sm:h-72"><canvas id="path"></canvas></div></div>
-  <div class="panel-f">Assumes {{ p.return_pct }}% a year after inflation, every year. Real markets won't be that smooth.</div>
+  <div class="panel-f">"All in" means investing {{ p.feasible_monthly|money0 }} a month: today's investing, your leftover cash and every realistic cut. Assumes {{ p.return_pct }}% a year after inflation.</div>
 </section>
 
-<div class="grid lg:grid-cols-2 gap-5 mb-5">
-  <section class="panel min-w-0">
-    {% set ms = t0.milestones[0] if t0.milestones else none %}
-    <div class="panel-h"><h2>Balance sheet</h2><span class="meta">Net worth {{ p.net_worth.net_worth|money0 }}</span></div>
-    <table class="tbl">
-      <thead><tr><th>Checkpoint</th><th class="r">Have</th><th class="r">Should have</th></tr></thead>
+<div class="grid lg:grid-cols-2 gap-x-8 gap-y-6 mb-6">
+  <section class="min-w-0">
+    <div class="section-h"><h2>What it takes</h2><span class="meta">A month · last 3 months of data</span></div>
+    <table class="tbl panel">
+      <thead><tr><th></th>{% for t in p.targets %}<th class="r {{ 'hidden sm:table-cell' if not loop.first }}">{{ t.target|money0 }}</th>{% endfor %}</tr></thead>
       <tbody>
-        <tr><td>Investments{% if ms %}<div class="text-[12px] c-muted">by age {{ ms.age }}</div>{% endif %}</td><td class="r">{{ p.net_worth.invested|money0 }}</td><td class="r">{{ ms.need|money0 if ms else "—" }}</td></tr>
-        <tr><td>Cash &amp; savings<div class="text-[12px] c-muted">6 months of spending</div></td><td class="r">{{ p.net_worth.liquid|money0 }}</td><td class="r">{{ p.emergency_fund_target|money0 }}</td></tr>
-        <tr><td>Investments at {{ p.target_age }}<div class="text-[12px] c-muted">at current pace</div></td><td class="r">{{ t0.projected_current_pace|money0 }}</td><td class="r">{{ t0.target|money0 }}</td></tr>
-      </tbody>
-      <thead><tr><th>Account</th><th class="r" colspan="2">Balance</th></tr></thead>
-      <tbody>
-        {% for a in p.net_worth.assets %}<tr><td>{{ a.name }} <span class="text-[12px] c-muted">{{ a.group }}</span></td><td class="r" colspan="2">{{ a.balance|money0 }}</td></tr>{% endfor %}
-        {% for d in p.net_worth.debts %}<tr><td>{{ d.name }} <span class="text-[12px] c-muted">owed</span></td><td class="r c-bad" colspan="2">−{{ d.balance|money0 }}</td></tr>{% endfor %}
-        <tr class="total"><td>Net worth</td><td class="r" colspan="2">{{ p.net_worth.net_worth|money0 }}</td></tr>
+        {% for label, key, strong in [("Needs invested", "required_monthly", false), ("Invest more than now", "extra_monthly", true), ("From leftover cash", "from_surplus", false), ("Cut spending by", "spending_cut", true)] %}
+          <tr><td class="{{ 'font-semibold' if strong else 'c-muted' }}">{{ label }}</td>{% for t in p.targets %}<td class="r {{ 'font-semibold' if strong }} {{ 'hidden sm:table-cell' if not loop.first }} {{ 'c-bad' if key == 'spending_cut' and not t.feasible }}">{{ t[key]|money0 }}</td>{% endfor %}</tr>
+        {% endfor %}
+        <tr><td>Savings rate needed</td>{% for t in p.targets %}<td class="r {{ 'hidden sm:table-cell' if not loop.first }}">{{ t.savings_rate_needed if t.savings_rate_needed < 100 else ">100" }}%</td>{% endfor %}</tr>
+        <tr><td>All in, you get there at</td>{% for t in p.targets %}<td class="r {{ 'hidden sm:table-cell' if not loop.first }}">{{ ("age " ~ t.alternatives.retire_at_age) if t.alternatives.retire_at_age else "after 70" }}</td>{% endfor %}</tr>
+        <tr><td>Extra pay a year, on time</td>{% for t in p.targets %}<td class="r {{ 'hidden sm:table-cell' if not loop.first }}">{{ t.alternatives.extra_income_yearly_pretax|money0 if t.alternatives.extra_income_yearly_pretax else "None" }}</td>{% endfor %}</tr>
+        <tr><td>Verdict</td>{% for t in p.targets %}<td class="r {{ 'hidden sm:table-cell' if not loop.first }}">{{ badge(t.rating.replace(" on current income", ""), {"Realistic": "ok", "Aggressive": "warn"}.get(t.rating, "bad")) }}</td>{% endfor %}</tr>
       </tbody>
     </table>
-    <div class="panel-f">{% if p.net_worth.liquid > p.emergency_fund_target * 1.5 %}You hold {{ (p.net_worth.liquid - p.emergency_fund_target)|money0 }} more cash than a 6-month fund. {% endif %}
-      <a class="link" href="/connect#manual">Update cash</a> · <a class="link" href="/retirement#accounts">Update investments</a></div>
   </section>
 
-  <section class="panel min-w-0">
-    <div class="panel-h"><h2>Subscriptions</h2><span class="meta num">{{ p.subscriptions.monthly|money0 }}/mo · {{ p.subscriptions.annual|money0 }}/yr</span></div>
-    {% for n in p.subscriptions.notes %}<div class="px-4 pt-3">{% call alert("warn") %}{{ n }}{% endcall %}</div>{% endfor %}
-    <table class="tbl {{ 'mt-3' if p.subscriptions.notes }}">
-      <thead><tr><th>Merchant</th><th class="r">Monthly</th><th class="r">Yearly</th></tr></thead>
-      <tbody>
-        {% for s in p.subscriptions["items"] %}
-          <tr><td>{{ s.merchant }}{% for f in s.flags if f != "streaming" %} {{ badge(f|capitalize, "warn") }}{% endfor %}</td><td class="r">{{ s.amount|money }}</td><td class="r">{{ s.annual_cost|money0 }}</td></tr>
-        {% else %}<tr><td colspan="3" class="c-muted">No recurring charges found yet. This needs about 3 months of history.</td></tr>{% endfor %}
-      </tbody>
-    </table>
+  <section id="coast" class="min-w-0 scroll-mt-20">
+    <div class="section-h"><h2>Financial independence</h2><span class="meta">{{ rs.target_source|capitalize if rs }}</span></div>
+    {% if rs %}
+    <dl class="list">
+      <div><dt class="c-muted">Your target</dt><dd class="num font-medium">{{ rs.target|money0 }}</dd></div>
+      <div><dt class="c-muted">FI number from spending <span class="hint">({{ rs.annual_spending|money0 }}/yr ÷ {{ rs.withdrawal_rate_pct }}%)</span></dt><dd class="num">{{ rs.fi_number|money0 }}</dd></div>
+      <div><dt class="c-muted">Coast FIRE number <span class="hint">(enough today to stop contributing)</span></dt><dd class="num">{{ rs.coast_number|money0 }}</dd></div>
+      <div><dt class="c-muted">Coast FIRE</dt><dd class="{{ 'c-ok' if rs.coast_reached or rs.coast_on_time else 'c-bad' }}">{% if rs.coast_reached %}Reached{% elif rs.coast_age %}Around age {{ rs.coast_age }}{% if not rs.coast_on_time %}, after {{ rs.retirement_age }}{% endif %}{% else %}Not at this pace{% endif %}</dd></div>
+      <div><dt class="c-muted">Reach your target at current pace</dt><dd>{{ ("age " ~ rs.fi_age) if rs.fi_age else "not before 70" }}</dd></div>
+      {% for k, v in rs.contribution_breakdown.items() %}<div><dt class="c-muted">{{ k[0]|upper ~ k[1:] }}</dt><dd class="num">{{ v|money0 }}/mo</dd></div>{% endfor %}
+    </dl>
+    {% endif %}
   </section>
 </div>
 
-<section class="panel mb-5">
-  <div class="panel-h"><h2>{{ "Spending cuts, no excuses" if p.harsh else "Spending cuts" }}</h2><span class="meta">3-month average · biggest first</span></div>
-  {% if t0.spending_cut > p.max_realistic_cut %}<div class="px-4 pt-3">{% call alert("bad") %}Even all of these together don't close the gap. See the recommendations above.{% endcall %}</div>{% endif %}
-  <table class="tbl {{ 'mt-3' if t0.spending_cut > p.max_realistic_cut }}">
-    <thead><tr><th>Category</th><th class="r">Now</th><th class="r">Limit</th><th class="r hidden sm:table-cell">Saves a year</th></tr></thead>
-    <tbody>
-      {% for c in p.harsh_cuts %}
-        <tr><td><span class="font-medium">{{ c.category }}</span>{% if p.harsh %}<div class="text-[12px] c-muted mt-0.5 max-w-xl">{{ c.message }}</div>{% endif %}</td>
-          <td class="r c-muted">{{ c.avg_month|money0 }}</td><td class="r font-semibold">{{ c.target|money0 }}</td><td class="r c-ok hidden sm:table-cell">{{ (c.cut * 12)|money0 }}</td></tr>
-      {% else %}<tr><td colspan="4" class="c-muted">Not enough spending history yet.</td></tr>{% endfor %}
-    </tbody>
-  </table>
-  {% if p.harsh_cuts %}<form method="post" action="/plan/apply_cuts" class="panel-f flex flex-wrap items-center justify-between gap-2">
-    <span>Sets these as monthly budgets. You can change them on Goals.</span><button class="btn btn-primary btn-sm">Use as my budgets</button></form>{% endif %}
+<section id="accounts" class="panel mb-6 scroll-mt-20">
+  <div class="panel-h"><h2>Investment accounts</h2><span class="meta">{{ accounts|length }} accounts · {{ accounts|sum(attribute="balance")|money0 }}</span></div>
+  <form method="post" action="/retirement/import-fidelity" enctype="multipart/form-data" class="px-4 py-3 border-b border-[var(--line-soft)] bg-[var(--head)] flex flex-wrap items-center gap-3">
+    <div class="flex-1 min-w-[15rem]"><div class="font-medium text-[13px]">Import from Fidelity</div>
+      <p class="hint">fidelity.com → Accounts → Positions → Download. Updates every account at once; read on this computer only.</p></div>
+    <input type="file" name="file" accept=".csv" required class="field !w-auto max-w-full" aria-label="Fidelity positions CSV"><button class="btn btn-primary">{{ icon(I.upload) }}Import</button>
+  </form>
+  <form method="post" action="/plan/balances">
+    <div class="overflow-x-auto"><table class="tbl">
+      <thead><tr><th>Account</th><th class="hidden sm:table-cell">Updated</th><th class="r">Balance</th><th class="r hidden md:table-cell">Adding a month</th></tr></thead>
+      <tbody>
+      {% for a in accounts %}
+        {% set stale = a.as_of and (today - a.as_of).days > 45 %}
+        <tr>
+          <td><span class="font-medium">{{ a.name }}</span> <span class="hint">{{ {"401k": "401(k)", "roth_ira": "Roth IRA", "traditional_ira": "Traditional IRA", "brokerage": "Brokerage", "hsa": "HSA"}.get(a.kind, "Other") }}</span></td>
+          <td class="hidden sm:table-cell text-[13px] {{ 'c-warn' if stale else 'c-muted' }}">{{ a.as_of or "—" }}{% if stale %} · out of date{% endif %}</td>
+          <td class="r"><input name="balance_{{ a.id }}" class="field !w-28 !h-8 text-right" inputmode="decimal" value="{{ a.balance|round|int }}" aria-label="{{ a.name }} balance"></td>
+          <td class="r hidden md:table-cell">{% if a.kind not in ("401k", "roth_ira") %}<input name="monthly_{{ a.id }}" class="field !w-24 !h-8 text-right" inputmode="decimal" value="{{ a.monthly_contribution|round|int }}" aria-label="{{ a.name }} monthly">{% else %}<span class="hint">from Goals</span>{% endif %}</td>
+        </tr>
+      {% else %}<tr><td colspan="4" class="c-muted">No accounts yet. Import from Fidelity or add one below.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+    {% if accounts %}<div class="panel-f flex items-center justify-between gap-2"><span>Change any balance, then save once.</span><button class="btn btn-primary btn-sm">Save balances</button></div>{% endif %}
+  </form>
+  <details class="border-t border-[var(--line-soft)]">
+    <summary class="px-4 py-3 flex items-center gap-1.5 text-[13px] font-medium link">{{ icon(I.plus, 14) }}Add or remove an account</summary>
+    <form method="post" action="/retirement/accounts" class="grid grid-cols-2 sm:grid-cols-4 gap-3 px-4 pb-4">
+      <label class="lbl col-span-2 sm:col-span-1">Name<input name="name" required class="field" placeholder="Fidelity 401(k)"></label>
+      <label class="lbl">Type<select name="kind" class="field">
+        {% for v, l in [("401k", "401(k)"), ("roth_ira", "Roth IRA"), ("traditional_ira", "Traditional IRA"), ("brokerage", "Brokerage"), ("hsa", "HSA"), ("other", "Other")] %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></label>
+      <label class="lbl">Balance<input name="balance" class="field" inputmode="decimal"></label>
+      <label class="lbl">Adding a month<input name="monthly_contribution" class="field" inputmode="decimal" value="0"></label>
+      <div class="col-span-2 sm:col-span-4"><button class="btn btn-primary">Add account</button></div>
+    </form>
+    {% if accounts %}<div class="px-4 pb-4 flex flex-wrap gap-2">
+      {% for a in accounts %}<form method="post" action="/retirement/accounts/{{ a.id }}"><input type="hidden" name="balance" value="{{ a.balance }}">
+        <button name="delete" value="1" class="btn btn-sm btn-danger" onclick="return confirm('Remove {{ a.name|e }}?')">Remove {{ a.name }}</button></form>{% endfor %}
+    </div>{% endif %}
+  </details>
 </section>
 
-<details id="settings" class="panel scroll-mt-20" {% if saved %}open{% endif %}>
-  <summary class="panel-h !border-0"><h2 class="flex items-center gap-1.5"><span class="chev c-muted">{{ icon(I.chev, 14) }}</span>Target and assumptions</h2>
-    <span class="meta">{{ p.return_pct }}% return · retire at {{ p.target_age }}</span></summary>
-  <div class="px-4 pb-4 border-t border-[var(--line-soft)]">{% include "_plan_settings.html" %}</div>
-</details>
-<p class="hint mt-4">These numbers are arithmetic on your own data and assumptions. They aren't investment, tax or legal advice, and Northstar never suggests what to buy.</p>
+<section id="cuts" class="mb-6 scroll-mt-20">
+  <div class="section-h"><h2>Where to cut</h2><span class="meta">3-month average · biggest savings first</span></div>
+  {% if t0.spending_cut > p.max_realistic_cut %}{% call alert("bad", "mb-3") %}Even every cut below doesn't close the gap. See "What to change".{% endcall %}{% endif %}
+  <table class="tbl panel">
+    <thead><tr><th>Category</th><th class="r">Now</th><th class="r">Limit</th><th class="r hidden sm:table-cell">Saves a year</th><th class="r hidden sm:table-cell">Of the gap</th></tr></thead>
+    <tbody>
+      {% for c in p.harsh_cuts %}
+        <tr><td><span class="font-medium">{{ c.category }}</span>{% if c.trend_pct >= 15 %} <span class="hint">up {{ c.trend_pct }}% vs your 12-month average</span>{% endif %}</td>
+          <td class="r c-muted">{{ c.avg_month|money0 }}</td><td class="r font-semibold">{{ c.target|money0 }}</td>
+          <td class="r hidden sm:table-cell">{{ (c.cut * 12)|money0 }}</td>
+          <td class="r hidden sm:table-cell c-muted">{{ ((c.cut / t0.spending_cut * 100)|round|int ~ "%") if t0.spending_cut else "—" }}</td></tr>
+      {% else %}<tr><td colspan="5" class="c-muted">Not enough spending history yet.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% if p.harsh_cuts %}<form method="post" action="/plan/apply_cuts" class="mt-3 flex flex-wrap items-center gap-3">
+    <button class="btn btn-primary btn-sm">Use these as my budgets</button><span class="hint">You can adjust them on Goals &amp; budgets.</span></form>{% endif %}
+</section>
+
+<section class="mb-6">
+  <div class="section-h"><h2>Everything you own and owe</h2><span class="meta">Net worth {{ p.net_worth.net_worth|money0 }}</span></div>
+  <table class="tbl panel">
+    <tbody>
+      {% for a in p.net_worth.assets %}<tr><td>{{ a.name }} <span class="hint">{{ a.group }}</span></td><td class="r">{{ a.balance|money0 }}</td></tr>{% endfor %}
+      {% for d in p.net_worth.debts %}<tr><td>{{ d.name }} <span class="hint">owed</span></td><td class="r c-bad">−{{ d.balance|money0 }}</td></tr>{% endfor %}
+      <tr class="total"><td>Net worth</td><td class="r">{{ p.net_worth.net_worth|money0 }}</td></tr>
+    </tbody>
+  </table>
+</section>
 
 <script>
 (() => {
-  const t = {{ t0|tojson }};
+  const t = {{ t0|tojson }}, birth = {{ birth|tojson }}, hist = {{ history|tojson }};
   const money = v => "$" + (v >= 1e6 ? (v / 1e6).toFixed(1) + "M" : Math.round(v / 1e3) + "k");
+  const pts = k => t.milestones.map(m => ({x: m.age, y: m[k]}));
+  const actual = hist.map(h => { const d = new Date(h.day); return {x: d.getFullYear() - birth + (d.getMonth() + 1 - 6) / 12, y: h.invested}; });
   new Chart(document.getElementById("path"), {type: "line",
-    data: {labels: t.milestones.map(m => m.age), datasets: [
-      {label: "Needed", data: t.milestones.map(m => m.need), borderColor: "#101828", borderWidth: 2, pointRadius: 0, tension: .25},
-      {label: "All in", data: t.milestones.map(m => m.all_in), borderColor: "#2451c7", borderWidth: 2, pointRadius: 0, tension: .25},
-      {label: "Current pace", data: t.milestones.map(m => m.current_pace), borderColor: "#dc6803", borderWidth: 2, borderDash: [5, 4], pointRadius: 0, tension: .25}]},
-    options: {maintainAspectRatio: false, interaction: {mode: "index", intersect: false},
-      plugins: {legend: {display: false}, tooltip: {callbacks: {title: i => "Age " + i[0].label, label: i => i.dataset.label + ": " + money(i.raw)}}},
-      scales: {x: {grid: {display: false}}, y: {border: {display: false}, ticks: {callback: money, maxTicksLimit: 6}}}}});
+    data: {datasets: [
+      {label: "Needed", data: pts("need"), borderColor: "#101828", borderWidth: 2, pointRadius: 0, tension: .25},
+      {label: "All in", data: pts("all_in"), borderColor: "#2451c7", borderWidth: 2, pointRadius: 0, tension: .25},
+      {label: "Current pace", data: pts("current_pace"), borderColor: "#dc6803", borderWidth: 2, borderDash: [5, 4], pointRadius: 0, tension: .25},
+      {label: "Actual", data: actual, borderColor: "#12b76a", backgroundColor: "#12b76a", pointRadius: 3.5, showLine: actual.length > 1, borderWidth: 2}]},
+    options: {maintainAspectRatio: false, parsing: false, interaction: {mode: "nearest", intersect: false},
+      plugins: {legend: {display: false}, tooltip: {callbacks: {title: i => "Age " + Math.round(i[0].raw.x), label: i => i.dataset.label + ": " + money(i.raw.y)}}},
+      scales: {x: {type: "linear", grid: {display: false}, ticks: {stepSize: 1, callback: v => Number.isInteger(v) ? v : ""}},
+               y: {border: {display: false}, ticks: {callback: money, maxTicksLimit: 6}}}}});
 })();
 </script>
 {% endif %}
+
+<details id="settings" class="panel scroll-mt-20" {% if saved == "1" or not p or p.needs %}open{% endif %}>
+  <summary class="panel-h !border-0"><h2 class="flex items-center gap-1.5"><span class="chev c-muted">{{ icon(I.chev, 14) }}</span>Target and assumptions</h2>
+    <span class="meta">The only place these are set</span></summary>
+  <div class="px-4 pb-4 border-t border-[var(--line-soft)]">{% include "_plan_settings.html" %}</div>
+</details>
+<p class="hint mt-4">These numbers are arithmetic on your own data and assumptions. They aren't investment, tax or legal advice, and Northstar never suggests what to buy.</p>
 {% endblock %}

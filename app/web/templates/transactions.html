@@ -2,18 +2,24 @@
 {% from "_ui.html" import page_header, badge %}
 {% block title %}Transactions · Northstar{% endblock %}
 {% block content %}
-{% call page_header("Transactions", "Change a category and every matching transaction is fixed, with a rule saved for next time.") %}{% endcall %}
+{% call page_header("Transactions", "Change a category and every matching transaction is fixed, with a rule saved for next time. Use Excluded for reimbursed or one-off charges you don't want counted.") %}{% endcall %}
 <section class="panel">
   <form method="get" class="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-[var(--line-soft)]">
     <input name="q" value="{{ f.q }}" placeholder="Search merchant or description" class="field sm:!w-64" aria-label="Search">
     <select name="month" class="field !w-auto" aria-label="Month" onchange="this.form.submit()"><option value="">All months</option>
-      {% for m in months %}<option {% if m == f.month %}selected{% endif %}>{{ m }}</option>{% endfor %}</select>
+      {% for m in months %}<option value="{{ m }}" {% if m == f.month %}selected{% endif %}>{{ m|mon_year }}</option>{% endfor %}</select>
     <select name="category" class="field !w-auto" aria-label="Category" onchange="this.form.submit()"><option value="">All categories</option>
       {% for c in categories + ["Uncategorized"] %}<option {% if c == f.category %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
     <select name="source" class="field !w-auto" aria-label="Categorized by" onchange="this.form.submit()"><option value="">Any source</option>
       {% for s in ["user", "rule", "memory", "plaid", "llm"] %}<option value="{{ s }}" {% if s == f.source %}selected{% endif %}>{{ {"user": "You", "rule": "Rule", "memory": "Memory", "plaid": "Plaid", "llm": "AI"}[s] }}</option>{% endfor %}</select>
-    <span class="sm:ml-auto hint">{{ rows|length }} shown · {{ total|money }} spent</span>
+    <span class="sm:ml-auto hint">{{ "{:,}".format(count) }} transaction{{ "s" if count != 1 }} · {{ total|money }} spent</span>
   </form>
+  {% if summary %}<div class="px-4 py-3 border-b border-[var(--line-soft)] bg-[var(--head)] flex flex-wrap gap-x-8 gap-y-2 text-[13px]">
+    <div><div class="stat-l">Total since {{ summary.since }}</div><div class="font-semibold text-[16px] num">{{ summary.total|money }}</div></div>
+    <div><div class="stat-l">Charges</div><div class="font-semibold text-[16px] num">{{ summary.count }}</div></div>
+    <div><div class="stat-l">Average charge</div><div class="font-semibold text-[16px] num">{{ summary.avg|money }}</div></div>
+    <div><div class="stat-l">Per month</div><div class="font-semibold text-[16px] num">{{ summary.per_month|money }}</div></div>
+  </div>{% endif %}
   <div class="overflow-x-auto">
   <table class="tbl">
     <thead><tr><th>Date</th><th>Merchant</th><th class="hidden md:table-cell">Account</th><th>Category</th><th class="r">Amount</th></tr></thead>
@@ -34,5 +40,12 @@
     </tbody>
   </table>
   </div>
+  {% if pages > 1 %}<div class="panel-f flex items-center justify-between">
+    <span>Page {{ page }} of {{ pages }}</span>
+    <span class="flex gap-2">
+      {% set qs = "month=" ~ (f.month|urlencode) ~ "&category=" ~ (f.category|urlencode) ~ "&q=" ~ (f.q|urlencode) ~ "&source=" ~ (f.source|urlencode) %}
+      {% if page > 1 %}<a class="btn btn-sm" href="/transactions?{{ qs }}&page={{ page - 1 }}">Newer</a>{% endif %}
+      {% if page < pages %}<a class="btn btn-sm" href="/transactions?{{ qs }}&page={{ page + 1 }}">Older</a>{% endif %}
+    </span></div>{% endif %}
 </section>
 {% endblock %}

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "_ui.html" import page_header, badge, alert, saved_toast %}
+{% block title %}Subscriptions · Northstar{% endblock %}
+{% block content %}
+{% call page_header("Subscriptions", "Every recurring charge, what it costs a year, and what you've decided to do about it.") %}{{ saved_toast(saved) }}{% endcall %}
+
+{% for a in subs.alerts %}
+  {% call alert("bad", "mb-3") %}<b>{{ a.merchant }}</b> charged {{ a.amount|money }} on {{ a.date }}, after you marked it cancelled on {{ a.cancelled_on }}. Check that the cancellation went through, or dispute the charge.{% endcall %}
+{% endfor %}
+{% for n in subs.notes %}{% call alert("warn", "mb-3") %}{{ n }}{% endcall %}{% endfor %}
+
+<section class="hero">
+  <div>
+    <div class="hero-l">Subscriptions cost you</div>
+    <div class="hero-v">{{ subs.annual|money0 }}<span class="text-[18px] font-medium c-muted"> a year</span></div>
+    <div class="hero-s">{{ subs.monthly|money0 }} a month, not counting rent, utilities or anything you've cancelled.</div>
+  </div>
+  <div class="hero-side">
+    <div><div class="stat-l">To review</div><div class="stat-v">{{ subs.to_review }}</div><div class="stat-s">{{ subs.review_annual|money0 }} a year</div></div>
+    <div><div class="stat-l">Cancelled</div><div class="stat-v">{{ subs.cancelled_annual|money0 }}</div><div class="stat-s">saved a year</div></div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="overflow-x-auto"><table class="tbl">
+    <thead><tr><th>Merchant</th><th class="r">Price</th><th class="r hidden sm:table-cell">A year</th><th class="hidden md:table-cell">Next charge</th><th class="hidden lg:table-cell">Price history</th><th class="r">Decision</th></tr></thead>
+    <tbody>
+    {% for i in subs["items"] %}
+      <tr class="{{ 'opacity-60' if i.status == 'cancelled' and 'Charged after cancel' not in i.flags }}">
+        <td><a href="/transactions?q={{ i.merchant|urlencode }}" class="font-medium">{{ i.merchant }}</a>
+          {% for f in i.flags %} {{ badge(f, "bad" if f == "Charged after cancel" else "warn") }}{% endfor %}
+          <div class="hint">{{ i.category }} · every {{ i.cadence_days }} days · since {{ i.first_charged }}</div></td>
+        <td class="r">{{ i.amount|money }}</td>
+        <td class="r hidden sm:table-cell">{{ i.annual|money0 }}</td>
+        <td class="hidden md:table-cell text-[13px] whitespace-nowrap">{{ i.next_expected if i.status != "cancelled" else "—" }}</td>
+        <td class="hidden lg:table-cell text-[13px] c-muted">{% for h in i.history[-3:] %}{{ h.amount|money }}{% if not loop.last %} → {% endif %}{% endfor %}</td>
+        <td class="r"><form method="post" action="/subscriptions/status" class="inline-flex">
+          <input type="hidden" name="key" value="{{ i.key }}">
+          <select name="status" class="field !w-auto !h-8 text-[13px]" aria-label="Decision for {{ i.merchant }}" onchange="this.form.submit()">
+            {% for v, l in [("review", "To review"), ("keep", "Keep"), ("cancelled", "Cancelled")] %}<option value="{{ v }}" {% if i.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+          </select></form></td>
+      </tr>
+    {% else %}<tr><td colspan="6" class="c-muted text-center py-8">No subscriptions found yet. This needs about 3 months of history.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  <div class="panel-f">Mark something Cancelled once you've cancelled it. If it charges you again, Northstar flags it here and on Overview.</div>
+</section>
+{% endblock %}

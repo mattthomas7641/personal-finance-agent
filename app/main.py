@@ -3,6 +3,8 @@ Routes live in app/web/routes/."""
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
+import os
 from contextlib import asynccontextmanager
 import logging
 from urllib.parse import quote
@@ -33,11 +35,35 @@ async def daily_sync(first_delay: float = 60, every: float = 6 * 3600):
                 has_items = s.exec(select(PlaidItem)).first() is not None
             if has_items and not STATUS["busy"]:
                 await background("Scheduled Plaid sync", sources.sync_plaid)
+            maybe_weekly_digest()
         except asyncio.CancelledError:
             raise
         except Exception:
             log.exception("scheduled sync round failed; will try again")
         await asyncio.sleep(every)
+
+
+def maybe_weekly_digest(now: dt.datetime | None = None) -> int | None:
+    """Start the weekly digest if the last one is 7+ days old. Skipped in local-only privacy mode, without an
+    API key, without data, or when today's question budget is spent."""
+    from app.agent import runner
+    from app.config import load_config
+    from app.models import AgentRun, Txn
+    from app.privacy import local_only
+    from app.web.routes.agent import spent_today
+
+    now = now or dt.datetime.now(dt.timezone.utc)
+    if local_only() or not os.environ.get("ANTHROPIC_API_KEY"):
+        return None
+    with session() as s:
+        if s.exec(select(Txn)).first() is None:
+            return None
+        last = s.exec(select(AgentRun).where(AgentRun.kind == "digest").order_by(AgentRun.id.desc())).first()
+    if last and now - last.created_at.replace(tzinfo=last.created_at.tzinfo or dt.timezone.utc) < dt.timedelta(days=7):
+        return None
+    if spent_today() >= float((load_config().get("agent") or {}).get("daily_cost_usd", 2.0)):
+        return None
+    return runner.launch(runner.DIGEST.format(day=now.date().isoformat()), kind="digest")
 
 
 @asynccontextmanager

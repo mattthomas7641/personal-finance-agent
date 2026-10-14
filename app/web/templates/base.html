@@ -36,23 +36,23 @@
     /* Shell */
     .sidebar { position: fixed; inset: 0 auto 0 0; width: 232px; background: #fbfbfc; border-right: 1px solid var(--line); flex-direction: column; z-index: 30; }
     .nav-group { padding: 0 .75rem; margin-top: 1.1rem; }
-    .nav-label { font-size: 11.5px; font-weight: 500; color: var(--ink-3); padding: 0 .6rem .35rem; }
-    .nav-item { display: flex; align-items: center; gap: .65rem; padding: .42rem .6rem; border-radius: 6px; color: var(--ink-2); font-weight: 500; font-size: 13.5px; }
+    .nav-label { font-size: 12px; font-weight: 500; color: var(--ink-3); padding: 0 .6rem .35rem; }
+    .nav-item { display: flex; align-items: center; gap: .65rem; padding: .42rem .6rem; border-radius: 6px; color: var(--ink-2); font-weight: 500; font-size: 13px; }
     .nav-item svg { color: var(--ink-4); flex-shrink: 0; }
     .nav-item:hover { background: #f0f2f5; color: var(--ink); }
     .nav-item.on { background: var(--accent-soft); color: var(--accent); } .nav-item.on svg { color: var(--accent); }
 
     /* Page */
     .page-h { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .75rem 1rem; margin-bottom: 1.25rem; }
-    .page-h h1 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; line-height: 1.25; }
+    .page-h h1 { font-size: 22px; font-weight: 600; letter-spacing: -.01em; line-height: 1.25; }
     .page-h p { color: var(--ink-3); font-size: 13px; margin-top: .2rem; max-width: 70ch; }
     .panel, .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
     .panel-h { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .8rem 1rem; border-bottom: 1px solid var(--line-soft); min-height: 48px; }
     .panel-h h2 { font-size: 14px; font-weight: 600; }
-    .panel-h .meta { font-size: 12.5px; color: var(--ink-3); }
+    .panel-h .meta { font-size: 12px; color: var(--ink-3); }
     .panel-b { padding: 1rem; }
-    .panel-f { padding: .7rem 1rem; border-top: 1px solid var(--line-soft); background: var(--head); border-radius: 0 0 10px 10px; font-size: 12.5px; color: var(--ink-3); }
-    .hint { font-size: 12.5px; color: var(--ink-3); }
+    .panel-f { padding: .7rem 1rem; border-top: 1px solid var(--line-soft); background: var(--head); border-radius: 0 0 10px 10px; font-size: 12px; color: var(--ink-3); }
+    .hint { font-size: 12px; color: var(--ink-3); }
 
     /* KPI strip */
     .kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -63,12 +63,30 @@
       .kpis { grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); }
       .kpi { border-top: 0 !important; border-right: 1px solid var(--line-soft); grid-column: auto !important; } .kpi:last-child { border-right: 0; }
     }
-    .stat-l { font-size: 12.5px; color: var(--ink-3); font-weight: 500; }
-    .stat-v { font-size: 22px; font-weight: 600; letter-spacing: -.015em; margin-top: .15rem; line-height: 1.2; }
+    .stat-l { font-size: 12px; color: var(--ink-3); font-weight: 500; }
+    .stat-v { font-size: 20px; font-weight: 600; letter-spacing: -.015em; margin-top: .15rem; line-height: 1.2; }
     .stat-s { font-size: 12px; color: var(--ink-3); margin-top: .2rem; }
 
+    /* One focal number per page */
+    .hero { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .5rem 2.5rem; margin-bottom: 1.75rem; }
+    .hero-l { font-size: 13px; color: var(--ink-3); font-weight: 500; }
+    .hero-v { font-size: 34px; font-weight: 600; letter-spacing: -.025em; line-height: 1.1; margin-top: .2rem; font-variant-numeric: tabular-nums; }
+    .hero-s { font-size: 13px; color: var(--ink-2); margin-top: .35rem; }
+    .hero-side { display: flex; gap: 2rem; flex-wrap: wrap; padding-bottom: .3rem; }
+    .hero-side .stat-v { font-size: 18px; }
+    @media (max-width: 639px) { .hero-v { font-size: 30px; } .hero-side { gap: 1.25rem; } }
+    .delta { font-size: 12px; font-weight: 500; white-space: nowrap; } .delta.good { color: var(--ok); } .delta.bad { color: var(--bad); } .delta.flat { color: var(--ink-3); }
+
+    /* Secondary content: a heading on the page background instead of another box */
+    .section { margin-top: 1.75rem; }
+    .section-h { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; margin-bottom: .6rem; }
+    .section-h h2 { font-size: 16px; font-weight: 600; letter-spacing: -.005em; }
+    .section-h .meta { font-size: 12px; color: var(--ink-3); }
+    .list > * { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .55rem 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+    .list > *:last-child { border-bottom: 0; }
+
     /* Tables */
-    .tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
     .tbl th { text-align: left; font-weight: 500; font-size: 12px; color: var(--ink-3); background: var(--head); padding: .55rem 1rem; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
     .tbl td { padding: .6rem 1rem; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
     .tbl tbody tr:last-child td { border-bottom: 0; }
@@ -81,11 +99,11 @@
     .rows > div:last-child { border-bottom: 0; } .rows dt, .rows .k { color: var(--ink-3); } .rows dd, .rows .v { font-variant-numeric: tabular-nums; text-align: right; }
 
     /* Controls */
-    .btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; height: 34px; padding: 0 .8rem; border-radius: 7px; font-size: 13.5px; font-weight: 500;
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; height: 34px; padding: 0 .8rem; border-radius: 7px; font-size: 14px; font-weight: 500;
       border: 1px solid #d0d5dd; background: #fff; color: var(--ink-2); box-shadow: 0 1px 2px rgba(16, 24, 40, .05); white-space: nowrap; transition: background .12s, border-color .12s; }
     .btn:hover { background: #f9fafb; border-color: #c2c8d1; color: var(--ink); }
     .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; } .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
-    .btn-sm { height: 28px; padding: 0 .6rem; font-size: 12.5px; }
+    .btn-sm { height: 28px; padding: 0 .6rem; font-size: 13px; }
     .btn-ghost { border-color: transparent; box-shadow: none; background: transparent; color: var(--ink-3); } .btn-ghost:hover { background: #f2f4f7; border-color: transparent; }
     .btn-danger:hover { color: var(--bad); border-color: var(--bad-line); background: var(--bad-bg); }
     .btn:disabled { opacity: .45; pointer-events: none; }
@@ -94,15 +112,15 @@
     textarea.field { height: auto; padding: .5rem .7rem; } input[type=file].field { padding: .35rem .5rem; height: auto; }
     .field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px #dbe5ff; }
     .field::placeholder { color: var(--ink-4); }
-    @media (min-width: 640px) { .field { font-size: 13.5px; } }
-    label.lbl { display: block; font-size: 12.5px; font-weight: 500; color: var(--ink-2); }
+    @media (min-width: 640px) { .field { font-size: 14px; } }
+    label.lbl { display: block; font-size: 13px; font-weight: 500; color: var(--ink-2); }
     label.lbl > .field { margin-top: .3rem; }
     input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 15px; height: 15px; }
     details > summary { cursor: pointer; list-style: none; } details > summary::-webkit-details-marker { display: none; }
     .chev { transition: transform .15s; } details[open] .chev { transform: rotate(90deg); }
 
     /* Status */
-    .badge, .pill { display: inline-flex; align-items: center; gap: .3rem; height: 20px; padding: 0 .45rem; border-radius: 5px; font-size: 11.5px; font-weight: 500;
+    .badge, .pill { display: inline-flex; align-items: center; gap: .3rem; height: 20px; padding: 0 .45rem; border-radius: 5px; font-size: 12px; font-weight: 500;
       border: 1px solid var(--line); background: #f9fafb; color: var(--ink-2); white-space: nowrap; vertical-align: middle; }
     .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .85; }
     .badge.plain::before, .pill::before { display: none; }
@@ -112,7 +130,7 @@
     .t-info { color: var(--info); background: var(--info-bg); border-color: var(--info-line); }
     .t-muted { color: var(--ink-3); }
     .c-ok { color: var(--ok); } .c-warn { color: var(--warn); } .c-bad { color: var(--bad); } .c-muted { color: var(--ink-3); }
-    .alert { display: flex; gap: .6rem; align-items: flex-start; padding: .65rem .85rem; border-radius: 8px; border: 1px solid; font-size: 13.5px; }
+    .alert { display: flex; gap: .6rem; align-items: flex-start; padding: .65rem .85rem; border-radius: 8px; border: 1px solid; font-size: 14px; }
     .alert svg { flex-shrink: 0; margin-top: 1px; }
     .bar { height: 6px; border-radius: 3px; background: #eaecf0; overflow: hidden; position: relative; }
     .bar > span { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--accent); }
@@ -122,37 +140,41 @@
   {% block head %}{% endblock %}
 </head>
 {% set path = request.url.path if request else "/" %}
+{% set ICON = {
+  "overview": "M3 11.5 12 4l9 7.5M5.5 10v9.5h13V10", "txns": "M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01",
+  "subs": "M4 7h16v12H4zM4 11h16M8 3v4M16 3v4", "plan": "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01",
+  "goals": "M5 21V4m0 0h11.5l-2.2 4.2 2.2 4.3H5", "ask": "M20.5 12a8.5 8.5 0 0 1-12.4 7.5L3.5 20.5l1-4.4A8.5 8.5 0 1 1 20.5 12z",
+  "accounts": "M3 10h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20.5h18M12 3.5l9 4.5H3z", "rules": "M4 5h16l-6.2 7.2V18l-3.6 2v-7.8z",
+  "privacy": "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"} %}
 {% set nav = [
-  ("Money", [("/", "Overview", "M3 11.5 12 4l9 7.5M5.5 10v9.5h13V10"), ("/transactions", "Transactions", "M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"), ("/connect", "Accounts", "M3 10h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20.5h18M12 3.5l9 4.5H3z")]),
-  ("Planning", [("/plan", "Plan", "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01"), ("/goals", "Goals", "M5 21V4m0 0h11.5l-2.2 4.2 2.2 4.3H5"), ("/retirement", "Retirement", "M3 17l6-6 4 4 8-8M15 7h6v6")]),
-  ("Assistant", [("/runs", "Questions", "M20.5 12a8.5 8.5 0 0 1-12.4 7.5L3.5 20.5l1-4.4A8.5 8.5 0 1 1 20.5 12z"), ("/rules", "Rules", "M4 5h16l-6.2 7.2V18l-3.6 2v-7.8z")]),
+  ("Money", [("/", "Overview", ICON.overview), ("/transactions", "Transactions", ICON.txns), ("/subscriptions", "Subscriptions", ICON.subs)]),
+  ("Planning", [("/plan", "Plan", ICON.plan), ("/goals", "Goals & budgets", ICON.goals)]),
+  ("Assistant", [("/runs", "Ask", ICON.ask)]),
+  ("Settings", [("/connect", "Accounts", ICON.accounts), ("/rules", "Rules", ICON.rules), ("/privacy", "Privacy & security", ICON.privacy)]),
 ] %}
 {% macro icon(d, size=18) %}<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ d }}"/></svg>{% endmacro %}
-{% set on = path if path in ["/", "/transactions", "/connect", "/plan", "/goals", "/retirement", "/runs", "/rules", "/privacy"] else ("/runs" if path.startswith("/runs") else path) %}
+{% set on = path if path in ["/", "/transactions", "/subscriptions", "/connect", "/plan", "/goals", "/runs", "/rules", "/privacy"] else ("/runs" if path.startswith("/runs") else path) %}
 <body>
   {% if not hide_nav %}
   <aside class="sidebar hidden md:flex">
     <a href="/" class="flex items-center gap-2.5 px-5 h-14 border-b border-[var(--line-soft)] font-semibold text-[15px]"><img src="/static/icon-180.png" alt="" class="w-7 h-7 rounded-md">Northstar</a>
-    <nav class="flex-1 overflow-y-auto pb-4">
+    <nav class="flex-1 overflow-y-auto pb-4 flex flex-col">
       {% for group, items in nav %}
-        <div class="nav-group"><div class="nav-label">{{ group }}</div>
+        <div class="nav-group {{ 'mt-auto pt-4' if group == 'Settings' }}"><div class="nav-label">{{ group }}</div>
           {% for href, label, d in items %}<a href="{{ href }}" class="nav-item {{ 'on' if on == href }}" {% if on == href %}aria-current="page"{% endif %}>{{ icon(d) }}{{ label }}</a>{% endfor %}
         </div>
       {% endfor %}
     </nav>
-    <div class="p-3 border-t border-[var(--line-soft)]">
-      <a href="/privacy" class="nav-item {{ 'on' if on == '/privacy' }}">{{ icon("M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z") }}Privacy &amp; security</a>
-    </div>
   </aside>
 
   <header class="md:hidden sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-[var(--line)]" style="padding-top: env(safe-area-inset-top)">
     <div class="h-12 px-4 flex items-center justify-between">
       <a href="/" class="flex items-center gap-2 font-semibold"><img src="/static/icon-180.png" alt="" class="w-6 h-6 rounded-md">Northstar</a>
-      <details class="relative">
+      <details class="relative" id="menu">
         <summary class="btn btn-ghost btn-sm" aria-label="All pages">{{ icon("M4 7h16M4 12h16M4 17h16", 20) }}</summary>
-        <div class="absolute right-0 mt-2 w-56 panel p-1.5 shadow-lg">
-          {% for group, items in nav %}{% for href, label, d in items %}<a href="{{ href }}" class="nav-item {{ 'on' if on == href }}">{{ icon(d) }}{{ label }}</a>{% endfor %}{% endfor %}
-          <a href="/privacy" class="nav-item {{ 'on' if on == '/privacy' }}">{{ icon("M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z") }}Privacy &amp; security</a>
+        <div class="fixed inset-0 bg-black/20 z-40" onclick="document.getElementById('menu').open = false"></div>
+        <div class="absolute right-0 mt-2 w-60 panel p-1.5 shadow-lg z-50">
+          {% for group, items in nav %}<div class="nav-label pt-2">{{ group }}</div>{% for href, label, d in items %}<a href="{{ href }}" class="nav-item {{ 'on' if on == href }}">{{ icon(d) }}{{ label }}</a>{% endfor %}{% endfor %}
         </div>
       </details>
     </div>
@@ -167,7 +189,7 @@
   {% if not hide_nav %}
   <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-[var(--line)] safe-bottom z-40">
     <div class="grid grid-cols-5 text-[11px] text-center">
-      {% for href, label, d in [nav[0][1][0], nav[1][1][0], nav[1][1][1], ("/transactions", "Activity", nav[0][1][1][2]), nav[0][1][2]] %}
+      {% for href, label, d in [("/", "Overview", ICON.overview), ("/plan", "Plan", ICON.plan), ("/goals", "Goals", ICON.goals), ("/transactions", "Transactions", ICON.txns), ("/runs", "Ask", ICON.ask)] %}
         <a href="{{ href }}" class="flex flex-col items-center gap-0.5 pt-2 pb-1 {{ 'text-[var(--accent)] font-medium' if on == href else 'text-[var(--ink-3)]' }}">{{ icon(d, 22) }}{{ label }}</a>
       {% endfor %}
     </div>

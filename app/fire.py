@@ -168,9 +168,8 @@ def plan(today: date | None = None) -> dict | None:
     if not birth:
         return {"needs": "birth_year", "net_worth": nw, "subscriptions": subscriptions(today), "cash_flow": cf}
 
-    age = today.year - birth + (today.month - 6) / 12  # mid-year approximation
+    age, months = R.timeline(today, birth, rp.retirement_age)  # same timeline as every other page
     target_age = rp.retirement_age
-    months = max(0, int(round((target_age - age) * 12)))
     r = (rp.expected_return_pct or 0) / 100
     invested = nw["invested"]
     investing_now = rs.monthly_contributions if rs else 0.0  # 401(k) + match + Roth + other, per month
@@ -302,10 +301,11 @@ def goal_register(ov: dict, fp: dict | None) -> list[dict]:
     if r and r["coast_number"]:
         rows.append({"name": "Coast FIRE", "detail": f"Retire at {r['retirement_age']} with no new contributions",
                      "target": r["coast_number"], "current": r["invested"], "progress_pct": r["coast_progress_pct"],
-                     "takes": "Reached" if r["coast_reached"] else (f"Reached around age {r['coast_age']} at your current pace"
-                                                                    if r["coast_age"] else "Not before retirement at this pace"),
-                     "status": "Reached" if r["coast_reached"] else ("On track" if r["coast_age"] else "Behind"),
-                     "tone": "ok" if r["coast_reached"] else ("info" if r["coast_age"] else "warn"), "href": "/retirement"})
+                     "takes": "Reached" if r["coast_reached"] else (
+                         f"Around age {r['coast_age']} at your current pace" + ("" if r["coast_on_time"] else f", after {r['retirement_age']}")
+                         if r["coast_age"] else "Not reached at your current pace"),
+                     "status": "Reached" if r["coast_reached"] else ("On track" if r["coast_on_time"] else "Behind"),
+                     "tone": "ok" if r["coast_reached"] or r["coast_on_time"] else "warn", "href": "/plan#coast"})
     roth = ov.get("roth")
     if roth:
         if roth["maxed"]:
@@ -340,3 +340,55 @@ def goal_register(ov: dict, fp: dict | None) -> list[dict]:
                      "status": "On track" if g["on_track"] else "Behind", "tone": "ok" if g["on_track"] else "warn",
                      "href": f"/goals#goal-{g['id']}", "goal_id": g["id"]})
     return rows
+
+
+# ---------------- balance history ----------------
+
+def snapshot(today: date | None = None) -> dict:
+    """Record today's totals (one row per day, overwritten during the day) and return them."""
+    from app.models import BalanceSnapshot
+
+    today = today or date.today()
+    nw = net_worth()
+    with session() as s:
+        s.merge(BalanceSnapshot(day=today, invested=nw["invested"], cash=nw["liquid"], debts=nw["total_debts"],
+                                net_worth=nw["net_worth"]))
+        s.commit()
+    return nw
+
+
+def history(days: int = 400) -> list[dict]:
+    from app.models import BalanceSnapshot
+
+    with session() as s:
+        rows = s.exec(select(BalanceSnapshot).order_by(BalanceSnapshot.day)).all()
+    return [{"day": r.day.isoformat(), "invested": r.invested, "cash": r.cash, "net_worth": r.net_worth} for r in rows][-days:]
+
+
+# ---------------- what-if ----------------
+
+def what_if(retire_age: int, monthly: float, return_pct: float, target: float, today: date | None = None) -> dict | None:
+    """Pure projection for the Plan page sliders: change one assumption and see the outcome immediately."""
+    from app import retirement as R
+
+    today = today or date.today()
+    with session() as s:
+        rp = s.get(RetirementPlan, 1) or RetirementPlan()
+        k = s.get(Plan401k, 1)
+    birth = rp.birth_year or (k.birth_year if k else None)
+    if not birth or target <= 0:
+        return None
+    age, months = R.timeline(today, birth, retire_age)
+    invested = net_worth()["invested"]
+    r = return_pct / 100
+    at_age = _fv(invested, monthly, r, months)
+    reach = None
+    for m in range(0, 12 * 60):
+        if _fv(invested, monthly, r, m) >= target:
+            reach = round(age + m / 12, 1)
+            break
+    need = _pmt(target, invested, r, months) if months else max(0.0, target - invested)
+    return {"retire_age": retire_age, "monthly": round(monthly, 2), "return_pct": return_pct, "target": target,
+            "at_age": round(at_age, 0), "reach_age": reach, "need_monthly": round(need, 2),
+            "gap_monthly": round(max(0.0, need - monthly), 2), "on_track": at_age >= target - 1,
+            "years": round(months / 12, 1)}

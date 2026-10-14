@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import statistics
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 
 from sqlmodel import select
 
@@ -48,7 +48,15 @@ def recurring(txns: list[Txn] | None = None) -> list[dict]:
                     and all(a == cur for a in amounts[i:])):
                 prev, changed_on = amounts[i - 1], ts[i].date
                 break
+        cadence = round(sum(gaps[-3:]) / len(gaps[-3:]))
+        history, last_amt = [], None
+        for t in ts:  # each distinct price and when it started
+            if round(t.amount, 2) != last_amt:
+                history.append({"amount": round(t.amount, 2), "since": t.date.isoformat()})
+                last_amt = round(t.amount, 2)
         out.append({
+            "key": key, "cadence_days": cadence, "history": history,
+            "next_expected": (ts[-1].date + timedelta(days=cadence)).isoformat(),
             "merchant": ts[-1].merchant or key.title(), "category": ts[-1].category, "amount": round(cur, 2),
             "previous_amount": round(prev, 2) if prev is not None else None,
             "price_changed_on": changed_on.isoformat() if changed_on else None,
@@ -94,7 +102,7 @@ def unusual(txns: list[Txn] | None = None, z: float = 3.5, min_amount: float = 1
             med, mad = stats[t.category]
             score = 0.6745 * (t.amount - med) / mad
             if score >= z:
-                out.append({"merchant": t.merchant, "category": t.category, "amount": t.amount,
+                out.append({"id": t.id, "merchant": t.merchant, "category": t.category, "amount": t.amount,
                             "date": t.date.isoformat(), "typical": round(med, 2)})
     return sorted(out, key=lambda r: -r["amount"])
 
@@ -123,7 +131,7 @@ def month_summary(month: str | None = None) -> dict:
     for c, v in sorted(spend.items(), key=lambda kv: -kv[1]):
         b = budgets.get(c)
         cats.append({"category": c, "spent": round(v, 2), "budget": b,
-                     "projected": round(v / last_day * days_in, 2) if b and last_day < days_in else round(v, 2),
+                     "projected": round(v / last_day * days_in, 2) if last_day < days_in else round(v, 2),
                      "over": bool(b and v > b)})
     total = sum(spend.values())
     return {"month": month, "categories": cats, "spend": round(total, 2), "income": round(income, 2),
@@ -146,3 +154,25 @@ def months() -> list[str]:
 
 
 
+
+
+def alerts(ins: dict | None = None) -> list[dict]:
+    """The "Needs a look" list: price increases, possible duplicates and unusually large charges, minus the ones
+    you've dismissed. Each has a stable key so a dismissal sticks."""
+    from app.db import session
+    from app.models import Dismissal
+
+    ins = ins or all_insights()
+    with session() as s:
+        gone = {d.key for d in s.exec(select(Dismissal)).all()}
+    out = []
+    for p in ins["price_increases"]:
+        out.append({"key": f"price:{p['key']}:{p['amount']}", "tone": "warn", "kind": "Price increase", "merchant": p["merchant"],
+                    "text": f"${p['previous_amount']:,.2f} → ${p['amount']:,.2f} since {p['price_changed_on']}"})
+    for d in ins["duplicates"]:
+        out.append({"key": f"dup:{':'.join(d['ids'])}", "tone": "bad", "kind": "Possible duplicate", "merchant": d["merchant"],
+                    "text": f"${d['amount']:,.2f} on {' and '.join(d['dates'])}"})
+    for u in ins["unusual"][:5]:
+        out.append({"key": f"big:{u['id']}", "tone": "info", "kind": "Large charge",
+                    "merchant": u["merchant"], "text": f"${u['amount']:,.2f} on {u['date']} (usual {u['category']}: ${u['typical']:,.2f})"})
+    return [a for a in out if a["key"] not in gone]

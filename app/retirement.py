@@ -37,6 +37,15 @@ def _accounts() -> list[RetirementAccount]:
         return s.exec(select(RetirementAccount).order_by(RetirementAccount.id)).all()
 
 
+def timeline(today: date, birth: int | None, retirement_age: int) -> tuple[float | None, int]:
+    """(age, months to retirement), shared by every page so they all count the same months.
+    Age uses a mid-year birthday; without a birth year, assume 30 years to go."""
+    if not birth:
+        return None, 360
+    age = today.year - birth + (today.month - 6) / 12
+    return age, max(0, int(round((retirement_age - age) * 12)))
+
+
 def months_until(a: date, b: date) -> int:
     return max(0, (b.year - a.year) * 12 + (b.month - a.month))
 
@@ -159,14 +168,16 @@ def months_to_reach(target: float, pv: float, monthly: float, r_annual: float, c
 
 @dataclass
 class RetirementStatus:
-    age: int | None
+    age: float | None
     retirement_age: int
     years_to_retirement: float
     annual_spending: float
     spending_source: str
     withdrawal_rate_pct: float
     expected_return_pct: float
-    fi_number: float
+    fi_number: float          # annual spending ÷ withdrawal rate
+    target: float             # what every projection aims at: your Plan target, else the FI number
+    target_source: str
     invested: float
     monthly_contributions: float
     contribution_breakdown: dict
@@ -179,6 +190,7 @@ class RetirementStatus:
     coast_reached: bool
     coast_progress_pct: float
     coast_age: float | None
+    coast_on_time: bool       # reach Coast FIRE before the retirement age
     progress_pct: float
     accounts: list = field(default_factory=list)
     notes: list = field(default_factory=list)
@@ -192,13 +204,15 @@ def retirement_status(today: date | None = None, plan: RetirementPlan | None = N
     accounts = _accounts()
     if not birth and not accounts:
         return None
-    age = today.year - birth if birth else None
-    years = max(0.0, plan.retirement_age - age) if age is not None else 30.0
-    months = int(round(years * 12))
+    age, months = timeline(today, birth, plan.retirement_age)
+    years = months / 12
     spending = plan.annual_spending if plan.annual_spending else trailing_annual_spending(today)
     source = "you entered" if plan.annual_spending else "your last 12 months of spending"
     r = (plan.expected_return_pct or 0) / 100
     fi = spending * 100 / plan.withdrawal_rate_pct if plan.withdrawal_rate_pct else 0.0
+    # Everything below aims at ONE number: the target you set on Plan, or the FI number from spending if you haven't.
+    target = plan.fire_target_low or fi
+    target_source = "your target" if plan.fire_target_low else "FI number from your spending"
 
     breakdown = {}
     if k and k.annual_salary:
@@ -216,18 +230,17 @@ def retirement_status(today: date | None = None, plan: RetirementPlan | None = N
     monthly = round(sum(breakdown.values()), 2)
     invested = round(sum(a.balance for a in accounts), 2)
 
+    from app.fire import _pmt
     projected = fv(invested, monthly, r, months)
-    g = (1 + r / 12) ** months if r else 1
-    need = fi - invested * g
-    required = max(0.0, (need * (r / 12) / (g - 1)) if r and g > 1 else need / max(months, 1))
-    m_fi = months_to_reach(fi, invested, monthly, r)
-    coast = fi / ((1 + r) ** years) if r else fi
+    required = _pmt(target, invested, r, months) if months else max(0.0, target - invested)
+    m_fi = months_to_reach(target, invested, monthly, r)
+    coast = target / ((1 + r) ** years) if r else target
     # Coast number shrinks as retirement gets closer, so solve month by month against the moving target.
     m_coast = None
     for m in range(0, 12 * 70 + 1):
         remaining_years = max(0.0, years - m / 12)
-        target = fi / ((1 + r) ** remaining_years) if r else fi
-        if fv(invested, monthly, r, m) >= target:
+        moving = target / ((1 + r) ** remaining_years) if r else target
+        if fv(invested, monthly, r, m) >= moving:
             m_coast = m
             break
     notes = []
@@ -240,13 +253,14 @@ def retirement_status(today: date | None = None, plan: RetirementPlan | None = N
     return RetirementStatus(
         age=age, retirement_age=plan.retirement_age, years_to_retirement=years, annual_spending=spending,
         spending_source=source, withdrawal_rate_pct=plan.withdrawal_rate_pct, expected_return_pct=plan.expected_return_pct,
-        fi_number=round(fi, 2), invested=invested, monthly_contributions=monthly, contribution_breakdown=breakdown,
-        projected_at_retirement=round(projected, 2), on_track=projected >= fi - 1, required_monthly=round(required, 2),
+        fi_number=round(fi, 2), target=round(target, 2), target_source=target_source, invested=invested, monthly_contributions=monthly, contribution_breakdown=breakdown,
+        projected_at_retirement=round(projected, 2), on_track=projected >= target - 1, required_monthly=round(required, 2),
         monthly_gap=round(max(0.0, required - monthly), 2),
         fi_age=round(age + m_fi / 12, 1) if (m_fi is not None and age is not None) else None,
+        coast_on_time=m_coast is not None and age is not None and age + m_coast / 12 <= plan.retirement_age,
         coast_number=round(coast, 2), coast_reached=invested >= coast, coast_progress_pct=round(min(100, invested / coast * 100), 1) if coast else 0,
         coast_age=round(age + m_coast / 12, 1) if (m_coast is not None and age is not None) else None,
-        progress_pct=round(min(100, invested / fi * 100), 1) if fi else 0,
+        progress_pct=round(min(100, invested / target * 100), 1) if target else 0,
         accounts=[{"name": a.name, "kind": a.kind, "balance": a.balance} for a in accounts], notes=notes,
     )
 

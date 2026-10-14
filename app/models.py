@@ -164,6 +164,7 @@ class AgentRun(SQLModel, table=True):
     cache_read_tokens: int = 0  # input served from the prompt cache
     output_tokens: int = 0
     seconds: float = 0.0        # wall time, question to answer
+    kind: str = "question"      # question | digest
     created_at: datetime = Field(default_factory=now)
 
 
@@ -174,3 +175,37 @@ class AgentStep(SQLModel, table=True):
     kind: str
     name: str = ""
     content: str = ""
+
+
+class SubscriptionDecision(SQLModel, table=True):
+    """What you decided about a recurring charge. 'cancelled' + a later charge = an alert."""
+    key: str = Field(primary_key=True)  # normalized descriptor
+    status: str = "review"              # keep | review | cancelled
+    decided_on: dt.date = Field(default_factory=lambda: dt.date.today())
+    note: str = ""
+
+
+class BalanceSnapshot(SQLModel, table=True):
+    """One row per day: totals at that point, so progress has a history and not just a projection."""
+    day: dt.date = Field(primary_key=True)
+    invested: float = 0.0
+    cash: float = 0.0
+    debts: float = 0.0
+    net_worth: float = 0.0
+
+
+class Dismissal(SQLModel, table=True):
+    """An alert you've seen and dismissed ("Needs a look"); it stays hidden and the digest skips it."""
+    key: str = Field(primary_key=True)
+    created_at: datetime = Field(default_factory=now)
+
+
+class Proposal(SQLModel, table=True):
+    """A change the agent suggests. The agent can't apply it: you approve or reject it on the run page."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    run_id: int = Field(index=True)
+    kind: str            # budget | retirement_target
+    payload: str         # JSON
+    reason: str = ""
+    status: str = "pending"  # pending | approved | rejected
+    created_at: datetime = Field(default_factory=now)

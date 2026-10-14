@@ -17,7 +17,7 @@ import anthropic
 
 from app.agent import tools
 from app.agent.checker import check
-from app.config import load_config
+from app.config import CATEGORIES, NON_SPEND, load_config
 from app.db import session
 from app.llm import client, cost, friendly_api_error, model
 from app.models import AgentRun, AgentStep
@@ -37,12 +37,16 @@ How to work:
 - get_insights returns detected subscriptions, price increases, duplicate charges and unusual charges.
 - get_goals returns the user's 401(k) status (IRS limit, year-to-date, projected year-end, % needed to max out this
   year and next, employer match), savings/retirement goals with required monthly amounts, 3-month cash flow,
-  where spending has room to trim, a budget plan that frees up what the goals need, the Roth IRA tracker
+  categories where spending has grown, the Roth IRA tracker
   (limit after income phase-out, contributed, monthly needed) and retirement (FI number, Coast FIRE number,
   projection, age you reach each).
 - get_plan returns the FIRE plan (e.g. "$1.5M-$2.0M by 40"): verdict, how much more to invest, how much to cut,
-  alternatives, net worth vs targets, subscriptions. If the user asked you to be harsh, be direct about the numbers. Use it for any question
+  alternatives, net worth vs targets, subscriptions, and the suggested spending limits (harsh_cuts: use these
+  for any budget proposal). If the user asked you to be harsh, be direct about the numbers. Use it for any question
   about goals, retirement, 401(k), budgets or cutting back. Explain its numbers; don't recompute them differently.
+- propose_budget and propose_retirement_target suggest a change. You can't apply anything: the user sees an
+  Approve / Reject card. Only propose when the user asks what to change or the numbers clearly call for it, base
+  the values on tool results, and mention the proposal in your answer.
 - Finish by calling final_answer. Every number in it must come from a tool result in this conversation;
   a checker rejects answers with unsupported numbers.
 
@@ -79,6 +83,15 @@ TOOL_SPECS = [
      "strict": True, "input_schema": {"type": "object", "properties": {
          "title": {"type": "string"}, "kind": {"type": "string", "enum": ["bar", "line"]}, "query": {"type": "string"}},
          "required": ["title", "kind", "query"], "additionalProperties": False}},
+    {"name": "propose_budget", "description": "Suggest a monthly spending limit for one category. Creates an Approve/Reject card; nothing changes until the user approves.",
+     "strict": True, "input_schema": {"type": "object", "properties": {
+         "category": {"type": "string", "enum": [c for c in CATEGORIES if c not in NON_SPEND]},
+         "monthly_limit": {"type": "number"}, "reason": {"type": "string"}},
+         "required": ["category", "monthly_limit", "reason"], "additionalProperties": False}},
+    {"name": "propose_retirement_target", "description": "Suggest a different retirement age and/or target amount (e.g. when the current one isn't realistic). Creates an Approve/Reject card.",
+     "strict": True, "input_schema": {"type": "object", "properties": {
+         "retirement_age": {"type": "integer"}, "target": {"type": "number"}, "reason": {"type": "string"}},
+         "required": ["retirement_age", "target", "reason"], "additionalProperties": False}},
     {"name": "final_answer", "description": "Submit the answer to the user. Rejected if it contains numbers not found in tool results.",
      "strict": True, "input_schema": {"type": "object", "properties": {"answer": {"type": "string"}},
                                       "required": ["answer"], "additionalProperties": False}},
@@ -113,16 +126,38 @@ class FinanceAgent:
             s.add(run)
             s.commit()
 
-    def create(self, parent_id: int | None = None) -> int:
+    def create(self, parent_id: int | None = None, kind: str = "question") -> int:
         with session() as s:
-            run = AgentRun(question=self.question, parent_id=parent_id)
+            run = AgentRun(question=self.question, parent_id=parent_id, kind=kind)
             s.add(run)
             s.commit()
             s.refresh(run)
         self.run_id = run.id
         return run.id
 
+    def propose(self, kind: str, payload: dict, reason: str) -> tuple[str, bool]:
+        from app.models import Proposal
+
+        with session() as s:
+            p = Proposal(run_id=self.run_id, kind=kind, payload=json.dumps(payload), reason=reason[:500])
+            s.add(p)
+            s.commit()
+            s.refresh(p)
+        out = f"Proposal {p.id} created ({json.dumps(payload)}). The user will approve or reject it; nothing has changed yet."
+        self.evidence.append(json.dumps(payload))  # the proposed values may be quoted in the answer
+        return out, False
+
     def call_tool(self, name: str, args: dict) -> tuple[str, bool]:
+        if name == "propose_budget":
+            limit = float(args["monthly_limit"])
+            if args["category"] not in CATEGORIES or args["category"] in NON_SPEND or not 0 <= limit <= 100_000:
+                return "Invalid budget proposal: category must be a spending category and the limit $0-$100,000.", True
+            return self.propose("budget", {"category": args["category"], "monthly_limit": round(limit, 2)}, args["reason"])
+        if name == "propose_retirement_target":
+            age, target = int(args["retirement_age"]), float(args["target"])
+            if not 30 <= age <= 80 or not 10_000 <= target <= 50_000_000:
+                return "Invalid proposal: retirement age must be 30-80 and the target $10k-$50M.", True
+            return self.propose("retirement_target", {"retirement_age": age, "target": round(target, 0)}, args["reason"])
         if name == "get_schema":
             return tools.schema(), False
         if name == "run_sql":
@@ -273,9 +308,18 @@ def cache_tail(messages: list[dict]) -> list[dict]:
     return out
 
 
-def launch(question: str, history: list[tuple[str, str]] | None = None, parent_id: int | None = None) -> int:
+DIGEST = """Write my weekly money digest for the week ending {day}. Cover, in this order and in short bullets:
+1. Spending in the last 7 days vs the 7 days before, and whether this month is on pace with my budgets.
+2. Anything new: recurring charges that started recently, price increases, possible duplicate charges.
+3. Retirement plan: invested now vs where I should be by my next birthday, and the monthly gap.
+4. One blunt action for this week.
+Use run_sql, get_insights and get_plan. Skip a section if there's nothing to report. Don't propose changes."""
+
+
+def launch(question: str, history: list[tuple[str, str]] | None = None, parent_id: int | None = None,
+           kind: str = "question") -> int:
     agent = FinanceAgent(question, history or [])
-    run_id = agent.create(parent_id)
+    run_id = agent.create(parent_id, kind)
     task = asyncio.create_task(agent.run())
     TASKS.add(task)
     task.add_done_callback(TASKS.discard)

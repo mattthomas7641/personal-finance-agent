@@ -17,7 +17,7 @@ from typing import Literal
 from pydantic import BaseModel
 from sqlmodel import select
 
-from app.config import CATEGORIES
+from app.config import AI_CATEGORIES
 from app.db import session
 from app.models import Rule, Txn
 
@@ -80,7 +80,7 @@ def from_plaid(pfc: dict | None) -> str | None:
 class Labeled(BaseModel):
     id: int
     merchant: str
-    category: Literal[tuple(CATEGORIES)]  # type: ignore[valid-type]
+    category: Literal[tuple(AI_CATEGORIES)]  # type: ignore[valid-type]
 
 
 class Batch(BaseModel):
@@ -88,7 +88,7 @@ class Batch(BaseModel):
 
 
 INSTRUCTIONS = f"""You categorize bank transaction descriptors for a personal budget.
-Categories: {", ".join(CATEGORIES)}.
+Categories: {", ".join(AI_CATEGORIES)}.
 - "Subscriptions" = recurring digital services (streaming, apps, cloud storage). Gyms go to "Health & Fitness".
 - Payroll/direct deposit = "Income". Moves between own accounts, Venmo/Zelle to people = "Transfers".
 - Ride-hail, transit, bikeshare, taxis = "Transport". Food delivery and restaurants = "Dining".

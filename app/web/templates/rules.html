@@ -9,7 +9,7 @@
     <table class="tbl">
       <thead><tr><th>Description contains</th><th>Category</th><th></th></tr></thead>
       <tbody>
-      {% for r in rules %}<tr><td class="mono text-[12.5px]">{{ r.pattern }}</td><td>{{ r.category }}</td>
+      {% for r in rules %}<tr><td class="mono text-[12px]">{{ r.pattern }}</td><td>{{ r.category }}</td>
         <td class="r"><form method="post" action="/rules/{{ r.id }}/delete"><button class="btn btn-sm btn-ghost btn-danger">Delete</button></form></td></tr>
       {% else %}<tr><td colspan="3" class="c-muted">None yet. Change a category on the Transactions page and a rule is saved here.</td></tr>{% endfor %}
       </tbody>
@@ -18,11 +18,7 @@
   <div class="space-y-5 min-w-0">
     <section class="panel">
       <div class="panel-h"><h2>How transactions were categorized</h2></div>
-      <dl class="rows px-4 text-[13px]">{% for k, v in by_source.items() %}<div><dt>{{ {"user": "By you", "rule": "Rules", "memory": "Memory", "plaid": "Plaid", "llm": "AI"}.get(k, k or "Not yet") }}</dt><dd>{{ v }}</dd></div>{% endfor %}</dl>
-    </section>
-    <section class="panel">
-      <div class="panel-h"><h2>Monthly budgets</h2><a href="/goals#budgets" class="link text-[12.5px]">Edit</a></div>
-      <dl class="rows px-4 text-[13px]">{% for k, v in budgets.items() %}<div><dt>{{ k }}</dt><dd>{{ v|money0 }}</dd></div>{% else %}<div><dt>No budgets set</dt></div>{% endfor %}</dl>
+      <dl class="rows px-4 text-[13px]">{% for k, v in by_source.items() %}<div><dt>{{ {"user": "By you", "rule": "Rules", "memory": "Merchant memory", "plaid": "Plaid", "llm": "AI", "truth": "Demo data", "": "Not yet"}.get(k or "", (k or "")|capitalize) }}</dt><dd>{{ v }}</dd></div>{% endfor %}</dl>
     </section>
   </div>
 </div>

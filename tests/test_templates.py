@@ -18,7 +18,7 @@ def test_template_compiles(name):
     templates.env.get_template(name)
 
 
-@pytest.mark.parametrize("path", ["/connect", "/transactions", "/goals", "/retirement", "/runs", "/rules", "/privacy"])
+@pytest.mark.parametrize("path", ["/connect", "/transactions", "/goals", "/plan", "/subscriptions", "/runs", "/rules", "/privacy"])
 def test_page_renders(path):
     with TestClient(app, client=("127.0.0.1", 5000)) as c:
         assert c.get(path).status_code == 200, path

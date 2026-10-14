@@ -1,19 +1,68 @@
 {% extends "base.html" %}
 {% from "_ui.html" import page_header, badge %}
-{% block title %}Questions · Northstar{% endblock %}
+{% block title %}Ask · Northstar{% endblock %}
 {% block content %}
-{% call page_header("Questions", "Every answer is checked against queries on your own data.") %}{% endcall %}
-<section class="panel mb-5"><div class="panel-b">{% include "_ask.html" %}</div></section>
-<section class="panel">
-  <div class="panel-h"><h2>History</h2><span class="meta">{{ runs|length }} questions · ${{ "%.2f"|format(runs|sum(attribute="cost_usd")) }} total · {{ runs|selectattr("verified")|list|length }} verified</span></div>
-  <table class="tbl">
-    <thead><tr><th>Question</th><th>Status</th><th class="hidden sm:table-cell r">Steps</th><th class="hidden sm:table-cell r">Cost</th></tr></thead>
-    <tbody>{% for r in runs %}
-      <tr class="click" onclick="location.href='/runs/{{ r.id }}'">
-        <td><a href="/runs/{{ r.id }}" class="font-medium">{{ r.question }}</a></td>
-        <td>{% if r.status == "running" %}{{ badge("Running", "info") }}{% elif r.status != "done" %}{{ badge(r.status|capitalize, "bad") }}{% elif r.verified %}{{ badge("Verified", "ok") }}{% else %}{{ badge("Unverified", "warn") }}{% endif %}</td>
-        <td class="hidden sm:table-cell r">{{ r.turns }}</td><td class="hidden sm:table-cell r c-muted">${{ "%.3f"|format(r.cost_usd) }}</td></tr>
-    {% else %}<tr><td colspan="4" class="text-center c-muted py-8">No questions yet.</td></tr>{% endfor %}</tbody>
-  </table>
+{% call page_header("Ask", "Answers come from queries on your own data, and every number is checked before you see it.") %}{% endcall %}
+{% set examples = ["What changed in my spending this month vs last?", "Which subscriptions should I cancel to hit my retirement target?",
+                   "Am I on track to max out my 401(k) and Roth this year?", "What should I change to retire at 40?"] %}
+<section class="panel mb-6"><div class="panel-b">{% include "_ask.html" %}
+  <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+    {% for q in examples %}<form method="post" action="/ask"><input type="hidden" name="question" value="{{ q }}"><button class="text-left text-[13px] link">{{ q }}</button></form>{% endfor %}
+  </div></div></section>
+
+{% if stats.n %}
+<section class="hero">
+  <div><div class="hero-l">Answers verified</div><div class="hero-v">{{ stats.verified_pct }}%</div>
+    <div class="hero-s">of {{ stats.n }} question{{ "s" if stats.n != 1 }} · {{ "$%.2f"|format(stats.total_cost) }} spent in total</div></div>
+  <div class="hero-side">
+    <div><div class="stat-l">Cost per answer</div><div class="stat-v">{{ "$%.3f"|format(stats.avg_cost or 0) }}</div></div>
+    <div><div class="stat-l">Time per answer</div><div class="stat-v">{{ (stats.avg_seconds ~ "s") if stats.avg_seconds else "—" }}</div></div>
+    <div><div class="stat-l">Input from cache</div><div class="stat-v">{{ stats.cached_pct if stats.cached_pct is not none else "—" }}%</div></div>
+    <div><div class="stat-l">Models</div><div class="text-[13px] mt-1">{% for m, n in stats.models.items() %}<div>{{ m }} <span class="c-muted">· {{ n }}</span></div>{% endfor %}</div></div>
+  </div>
 </section>
+{% endif %}
+
+<div class="grid lg:grid-cols-3 gap-x-8 gap-y-6">
+  <section class="panel lg:col-span-2 min-w-0">
+    <div class="panel-h"><h2>History</h2><span class="meta">{{ runs|length }} questions</span></div>
+    <table class="tbl">
+      <thead><tr><th>Question</th><th>Status</th><th class="hidden sm:table-cell r">Steps</th><th class="hidden sm:table-cell r">Cost</th></tr></thead>
+      <tbody>{% for r in runs %}
+        <tr class="click" onclick="location.href='/runs/{{ r.id }}'">
+          <td><a href="/runs/{{ r.id }}" class="font-medium">{{ "Weekly digest" if r.kind == "digest" else r.question }}</a>
+            <div class="hint">{{ r.created_at.astimezone().strftime("%b %d, %H:%M") }}</div></td>
+          <td class="whitespace-nowrap">{% if r.status == "running" %}{{ badge("Running", "info") }}{% elif r.status != "done" %}{{ badge(r.status|capitalize, "bad") }}{% elif r.verified %}<span class="c-ok text-[13px] font-medium">Verified</span>{% else %}{{ badge("Unverified", "warn") }}{% endif %}</td>
+          <td class="hidden sm:table-cell r">{{ r.turns }}</td><td class="hidden sm:table-cell r c-muted">${{ "%.3f"|format(r.cost_usd) }}</td></tr>
+      {% else %}<tr><td colspan="4" class="c-muted py-6">No questions yet. Try one of the examples above.</td></tr>{% endfor %}</tbody>
+    </table>
+  </section>
+
+  <div class="min-w-0">
+    {% if stats.by_day %}<section>
+      <div class="section-h"><h2>Spend by day</h2><span class="meta">Last 30 days with questions</span></div>
+      <div class="relative h-40"><canvas id="spend"></canvas></div>
+    </section>{% endif %}
+    <section class="{{ 'section' if stats.by_day }}">
+      <div class="section-h"><h2>Eval scoreboard</h2><span class="meta">Synthetic ledger</span></div>
+      <dl class="list text-[13px]">
+        {% if evals.checker %}<div><dt class="c-muted">Number checker</dt><dd>{{ evals.checker.caught }} caught · {{ evals.checker.false_positives }} false alarms</dd></div>{% endif %}
+        {% if evals.injection %}<div><dt class="c-muted">Prompt injection</dt><dd>{{ evals.injection.resisted }} unaffected</dd></div>{% endif %}
+        {% if evals.categorize %}<div><dt class="c-muted">Categorization</dt><dd>{{ (evals.categorize.transaction_accuracy * 100)|round|int }}% correct</dd></div>{% endif %}
+        {% for m, q in (evals.qa_models or {}).items()|sort(attribute="1.avg_cost_usd") %}
+          <div><dt class="c-muted">{{ m.replace("claude-", "").replace(",", " → ") }}</dt><dd>{{ (q.accuracy * 100)|round|int }}% · ${{ "%.4f"|format(q.avg_cost_usd) }}/q</dd></div>
+        {% endfor %}
+      </dl>
+      <p class="hint mt-2">Run <span class="mono">python -m evals.run</span> to refresh.</p>
+    </section>
+  </div>
+</div>
+<script>
+{% if stats.by_day %}
+new Chart(document.getElementById('spend'), {type: 'bar',
+  data: {labels: {{ stats.by_day|map(attribute=0)|map('replace', '2026-', '')|list|tojson }}, datasets: [{data: {{ stats.by_day|map(attribute=1)|list|tojson }}, backgroundColor: '#2451c7', borderRadius: 2, maxBarThickness: 18}]},
+  options: {maintainAspectRatio: false, plugins: {legend: {display: false}, tooltip: {callbacks: {label: i => '$' + i.raw.toFixed(3)}}},
+    scales: {x: {grid: {display: false}, ticks: {maxRotation: 0, autoSkipPadding: 8}}, y: {border: {display: false}, ticks: {maxTicksLimit: 4, callback: v => '$' + v.toFixed(2)}}}}});
+{% endif %}
+</script>
 {% endblock %}

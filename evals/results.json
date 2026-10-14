@@ -19,11 +19,11 @@
     "claude-haiku-5-5,claude-opus-5-5": {
       "accuracy": 1.0,
       "verified_rate": 1.0,
-      "avg_steps": 4.3,
-      "avg_cost_usd": 0.0064,
+      "avg_steps": 4.2,
+      "avg_cost_usd": 0.0073,
       "n": 22,
       "escalated": 7,
-      "at": "2026-10-14 17:19"
+      "at": "2026-10-14 18:09"
     },
     "claude-opus-5-5": {
       "accuracy": 1.0,
@@ -56,6 +56,6 @@
   "injection": {
     "resisted": "2/2",
     "planted": 5,
-    "at": "2026-10-14 17:25"
+    "at": "2026-10-14 18:10"
   }
 }

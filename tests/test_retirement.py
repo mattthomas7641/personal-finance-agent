@@ -101,7 +101,8 @@ def test_fi_and_coast_numbers():
     plan = _setup(100_000, annual_spending=40_000, withdrawal_rate_pct=4, expected_return_pct=5)
     st = R.retirement_status(TODAY, plan)
     assert st.fi_number == 1_000_000
-    assert st.coast_number == pytest.approx(1_000_000 / 1.05 ** 30, abs=0.01)  # age 30 -> 60
+    _, months = R.timeline(TODAY, 1996, 60)  # age 30.3 -> 60, the same timeline Plan uses
+    assert st.coast_number == pytest.approx(1_000_000 / 1.05 ** (months / 12), abs=0.01)
     assert not st.coast_reached and st.invested == 100_000
 
 
@@ -118,7 +119,7 @@ def test_contributions_bring_coast_age_and_fi_age():
     assert st.coast_age is not None and 30 < st.coast_age < 60
     assert st.fi_age is not None and st.fi_age > st.coast_age
     # required monthly is exactly what reaches FI by 60
-    proj = R.fv(50_000, st.required_monthly, 0.05, 360)
+    proj = R.fv(50_000, st.required_monthly, 0.05, R.timeline(TODAY, 1996, 60)[1])
     assert proj == pytest.approx(1_000_000, rel=1e-3)
 
 

@@ -134,3 +134,31 @@ def test_goal_register_includes_retirement_roth_and_401k():
     assert rows[1]["status"] == "In progress" and "$2,000/mo" in rows[1]["takes"]
     assert rows[2]["status"] == "Set up"
     assert fire.goal_register(ov, {"needs": "birth_year"})[0]["status"] == "Set up"
+
+
+def test_every_page_uses_the_same_monthly_need():
+    """Plan, Goals and the retirement tracker must agree on what the target needs per month."""
+    from app import retirement as R
+    configure()
+    p = fire.plan(TODAY)
+    rs = R.retirement_status(TODAY)
+    assert rs.target == 1_500_000 and rs.target_source == "your target"
+    assert rs.required_monthly == pytest.approx(p["targets"][0]["required_monthly"], abs=0.01)
+
+
+def test_what_if_matches_plan_and_responds_to_inputs():
+    configure()
+    p = fire.plan(TODAY)
+    t0 = p["targets"][0]
+    w = fire.what_if(40, t0["required_monthly"], 5.0, 1_500_000, TODAY)
+    assert w["on_track"] and w["gap_monthly"] == pytest.approx(0, abs=0.01) and w["reach_age"] <= 40.1
+    later = fire.what_if(45, t0["required_monthly"], 5.0, 1_500_000, TODAY)
+    assert later["need_monthly"] < t0["required_monthly"] and later["at_age"] > w["at_age"]
+
+
+def test_snapshot_records_one_row_per_day():
+    configure()
+    fire.snapshot(TODAY)
+    fire.snapshot(TODAY)
+    h = fire.history()
+    assert [r["day"] for r in h].count(TODAY.isoformat()) == 1 and h[-1]["invested"] == 58_500

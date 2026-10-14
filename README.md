@@ -48,7 +48,7 @@ More detail: [architecture and design decisions](docs/ARCHITECTURE.md) · [threa
 ## Cost-aware design
 
 - **Categorization** runs a cascade: your rules, built-in patterns, merchant memory, then Plaid's own category. Only the remaining **unique descriptors** go to Claude, in batches of 80, so a year of transactions is one or two calls (about 2¢ per 1,000 transactions).
-- **Questions** start on Claude Haiku 5.5. If the number checker rejects an answer, the run switches to Opus 5.5. The checker is what makes a cheap model safe to try first. On the eval this is 100% verified at **$0.0064 per question, 70% less than Opus alone**.
+- **Questions** start on Claude Haiku 5.5. If the number checker rejects an answer, the run switches to Opus 5.5. The checker is what makes a cheap model safe to try first. On the eval this is 100% correct and verified at **$0.0073 per question, about two-thirds less than Opus alone**.
 - **Prompt caching** covers the whole conversation, not just the system prompt, so each step re-reads earlier tool results at 5–10% of the input price. Planning tool output is trimmed for the model.
 - **Guardrails:** a per-question budget, a daily budget (`agent.daily_cost_usd`), and tokens, cost, time and model recorded for every question.
 
@@ -76,7 +76,7 @@ The Q&A set is 22 questions: 20 with SQL-computed answers, scored on the **headl
 | Agent model | Correct | Verified | Steps | Cost / question |
 |---|---|---|---|---|
 | haiku-5-5 | 100% (22 q) | 96% | 4.2 | $0.0006 |
-| haiku-5-5 → opus-5-5 | 100% (22 q) | 100% | 4.3 | $0.0064 |
+| haiku-5-5 → opus-5-5 | 100% (22 q) | 100% | 4.2 | $0.0073 |
 | sonnet-5-5 | 100% (22 q) | 100% | 3.8 | $0.0092 |
 | opus-5-5 | 100% (22 q) | 100% | 4.0 | $0.0213 |
 <!-- scoreboard:end -->
@@ -100,15 +100,18 @@ Open http://localhost:8766 → **Accounts**:
 - **Accounts Plaid can't reach** (e.g. a HYSA whose bank blocks aggregators): add them by hand with a balance and APY. Northstar estimates interest, detects your monthly deposits from transfers in your connected accounts, and savings goals can follow the account's balance.
 - **Update mode:** when a bank needs you to log in again (password change, expiring consent), Northstar flags it on the Overview and Accounts pages and **Reconnect** reopens Plaid for the same connection, keeping your history. Other banks keep syncing.
 
-## Goals, 401(k) and budgets
+## What it does
 
-- **401(k) max-out tracker.** Enter a few pay-stub numbers (salary, contribution %, year-to-date, employer match); the pay schedule is detected from your deposits. It projects your year-end total against the IRS limit (including age 50+ / 60-63 catch-up), tells you the exact % to land on the limit with the paychecks left, or the % to set from January if that's unrealistic, and warns about missed match or maxing out early without a true-up.
-- **Savings and retirement goals** with required monthly amounts; retirement projections use your own return assumption and count 401(k) contributions + match (without double counting a planned 401(k) increase).
-- **Roth IRA tracker.** IRS limit with age 50+ catch-up and the MAGI phase-out (proportional reduction, rounded up to $10, $200 floor), contributions entered or auto-summed from matching transfers, the April 15 deadline, and the monthly amount to max out by Dec 31.
-- **Fidelity import.** Upload the Positions CSV from fidelity.com and every account's balance (401(k), Roth IRA, brokerage, HSA) updates at once, matched by the last 4 digits of the account number. Parsed locally; nothing leaves the machine.
-- **Retirement and Coast FIRE.** FI number = annual spending ÷ withdrawal rate (spending defaults to your real last 12 months). Projects all accounts plus 401(k), match, Roth and other contributions to your retirement age, gives the required monthly amount and the age you reach FI. Coast FIRE number = FI ÷ (1 + return)^years left, with your progress and the age you'll reach it.
-- **Budget plan.** Works out how much more you need per month, takes part from your average surplus, then trims discretionary categories (never rent, utilities, health) with a reason for each: *"up 23% vs your 12-month average; over budget 1 of the last 3 months"*. One click turns it into spending limits.
-- The agent can answer *"Am I on track to max out my 401(k)?"* or *"Where should I cut back?"* from the same numbers. It won't recommend investments or tax strategies.
+| Page | What you get |
+|---|---|
+| **Overview** | Invested vs. where you should be by your next birthday, then this month: spent, income and left over with changes vs. last month, spending by category with pace and budgets, alerts you can dismiss, subscriptions and the weekly digest. |
+| **Plan** | One target (e.g. $1.5M–$2.0M by 40) and one set of assumptions. What it takes per month, a verdict on how realistic it is, recommendations, a **what-if** calculator (age, monthly investing, return, target), the projection with your **actual balance history**, Coast FIRE, investment accounts (Fidelity import or edit all balances at once) and where to cut. |
+| **Goals & budgets** | Every goal in one list (retirement target, Coast FIRE, Roth IRA, 401(k), savings goals). 401(k) max-out tracker with IRS limits and catch-ups, Roth IRA tracker with the MAGI phase-out, savings goals that can follow an account, and a budget table with 3- and 12-month averages and this month's pace. |
+| **Subscriptions** | Every recurring charge with its yearly cost, next expected charge, price history and a keep / review / cancelled decision. A charge after you marked something cancelled is flagged. |
+| **Ask** | Questions answered by the agent, with every number checked. The agent can **propose** a budget or a retirement-target change, but only you can apply it (Approve / Reject). A **weekly digest** runs on its own every 7 days. The page shows verified rate, cost and time per answer, cache hit rate and the eval scoreboard. |
+| **Transactions** | Search, filter and recategorize (rules are learned); a merchant search shows total, count, average and per-month spend. Mark reimbursed or one-off charges **Excluded**. |
+
+All projections are arithmetic on your own data and assumptions. Northstar never recommends investments or tax strategies.
 
 ## On your phone
 
