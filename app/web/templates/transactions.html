@@ -8,24 +8,24 @@
     {% for c in categories + ["Uncategorized"] %}<option {% if c == f.category %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
   <select name="source" class="field !w-auto" onchange="this.form.submit()"><option value="">Categorized by: any</option>
     {% for s in ["user", "rule", "memory", "plaid", "llm"] %}<option {% if s == f.source %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
-  <input name="q" value="{{ f.q }}" placeholder="Search merchant or description" class="field !w-64">
-  <span class="ml-auto self-center text-zinc-500">{{ rows|length }} shown · spending {{ total|money }}</span>
+  <input name="q" value="{{ f.q }}" placeholder="Search merchant or description" class="field sm:!w-64">
+  <span class="sm:ml-auto self-center text-zinc-500">{{ rows|length }} shown · spending {{ total|money }}</span>
 </form>
 <p class="text-xs text-zinc-500 mb-2">Change a category and every transaction with the same description is fixed, and a rule is saved so it never needs fixing again.</p>
 <div class="card overflow-hidden">
 <table class="w-full text-sm">
-  <thead class="bg-zinc-50 text-zinc-500 text-left"><tr><th class="px-3 py-2">Date</th><th class="px-3 py-2">Merchant</th><th class="px-3 py-2">Account</th><th class="px-3 py-2">Category</th><th class="px-3 py-2 text-right">Amount</th></tr></thead>
+  <thead class="bg-zinc-50 text-zinc-500 text-left"><tr><th class="px-3 py-2">Date</th><th class="px-3 py-2">Merchant</th><th class="px-3 py-2 hidden sm:table-cell">Account</th><th class="px-3 py-2">Category</th><th class="px-3 py-2 text-right">Amount</th></tr></thead>
   <tbody>
   {% for t, acct in rows %}
     <tr class="border-t border-zinc-100">
-      <td class="px-3 py-1.5 text-zinc-500 whitespace-nowrap">{{ t.date }}{% if t.pending %} <span class="pill">pending</span>{% endif %}</td>
-      <td class="px-3 py-1.5"><div>{{ t.merchant or t.raw_name }}</div><div class="text-xs text-zinc-400 mono">{{ t.raw_name }}</div></td>
-      <td class="px-3 py-1.5 text-zinc-500">{{ acct or "" }}</td>
+      <td class="px-3 py-1.5 text-zinc-500 whitespace-nowrap text-xs sm:text-sm">{{ t.date.strftime("%b %d") }}<span class="hidden sm:inline">, {{ t.date.year }}</span>{% if t.pending %} <span class="pill">pending</span>{% endif %}</td>
+      <td class="px-3 py-1.5"><div>{{ t.merchant or t.raw_name }}</div><div class="text-xs text-zinc-400 mono hidden sm:block">{{ t.raw_name }}</div></td>
+      <td class="px-3 py-1.5 text-zinc-500 hidden sm:table-cell">{{ acct or "" }}</td>
       <td class="px-3 py-1.5">
         <select name="category" class="field !w-auto !py-1 text-xs" hx-post="/txn/{{ t.id }}/category" hx-trigger="change" hx-target="next span">
           {% if not t.category %}<option value="">—</option>{% endif %}
           {% for c in categories %}<option {% if c == t.category %}selected{% endif %}>{{ c }}</option>{% endfor %}
-        </select> <span class="text-xs text-zinc-400">{{ t.category_source }}</span></td>
+        </select> <span class="text-xs text-zinc-400 hidden sm:inline">{{ t.category_source }}</span></td>
       <td class="px-3 py-1.5 text-right num {{ 'text-emerald-700' if t.amount < 0 }}">{{ (-t.amount)|money if t.amount < 0 else t.amount|money }}{% if t.amount < 0 %} in{% endif %}</td>
     </tr>
   {% else %}<tr><td colspan="5" class="px-3 py-10 text-center text-zinc-500">No transactions match.</td></tr>{% endfor %}

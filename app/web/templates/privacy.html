@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 <h1 class="text-xl font-semibold mb-1">Privacy</h1>
+{% if error %}<div class="mb-3 text-sm text-red-800 bg-red-50 rounded-lg p-3">{{ error }}</div>{% endif %}
+{% if saved == "passcode" %}<div class="mb-3 text-sm text-emerald-800 bg-emerald-50 rounded-lg p-3">Passcode saved. Any phone that was signed in needs to sign in again.</div>{% endif %}
 <p class="text-sm text-zinc-600 mb-4">Your data is stored only on this computer. Below is exactly what may be sent to the Claude API, and a log of everything that has been.</p>
 
 <div class="grid md:grid-cols-2 gap-4">
@@ -31,6 +33,26 @@
         <button class="btn">Categorize {{ uncategorized }} with AI (sends scrubbed descriptions)</button></form>
     {% endif %}
   </div>
+</div>
+
+<div id="phone" class="card p-5 mt-4">
+  <h2 class="font-semibold mb-1">Phone access</h2>
+  <p class="text-sm text-zinc-600 mb-3">Only this Mac and your own devices on Tailscale can open ledger-agent, and phones need the passcode.
+    Pages you open on your phone are saved there, so you can still see your last-synced numbers when the Mac is off.</p>
+  {% if is_local %}
+    <form method="post" action="/security/passcode" class="grid sm:grid-cols-3 gap-2 mb-3">
+      <input type="password" name="passcode" required minlength="6" class="field" placeholder="{{ 'New passcode' if has_passcode else 'Choose a passcode (6+ characters)' }}">
+      <input type="password" name="confirm" required minlength="6" class="field" placeholder="Repeat it">
+      <button class="btn btn-primary">{{ "Change passcode" if has_passcode else "Set passcode" }}</button>
+    </form>
+  {% else %}<p class="text-sm mb-3">Signed in on this device. <a class="underline" href="/logout">Sign out and delete offline copies</a></p>{% endif %}
+  <ol class="text-sm list-decimal pl-5 space-y-1 text-zinc-700">
+    <li>Install Tailscale (free) on this Mac and your iPhone, and sign in to the same account on both.</li>
+    <li>{% if has_passcode %}✓ Passcode is set.{% else %}Set a passcode above.{% endif %}</li>
+    <li>On your iPhone, open Safari to
+      {% if tailscale_ip %}<span class="mono font-medium">http://{{ tailscale_ip }}:8766</span>{% else %}<span class="mono">http://&lt;your Mac's Tailscale IP&gt;:8766</span> (shown here once Tailscale is running){% endif %},
+      sign in, then Share → Add to Home Screen.</li>
+  </ol>
 </div>
 
 <div class="card p-5 mt-4">
