@@ -1,0 +1,12 @@
+# Copy to config.yaml to customize.
+models:
+  categorize: claude-sonnet-5     # bulk, cheap
+  agent: claude-opus-5-5          # answers questions
+agent:
+  max_turns: 16
+  max_cost_usd: 0.50
+budgets:            # monthly, by category
+  Dining: 400
+  Groceries: 600
+  Shopping: 300
+  Entertainment: 100

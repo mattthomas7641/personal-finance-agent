@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}ledger-agent{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    .btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .8rem;border-radius:.5rem;font-size:.875rem;font-weight:500;border:1px solid #d4d4d8;background:#fff}
+    .btn:hover{background:#f4f4f5} .btn-primary{background:#18181b;color:#fff;border-color:#18181b} .btn-primary:hover{background:#27272a}
+    .card{background:#fff;border:1px solid #e4e4e7;border-radius:.75rem}
+    .pill{display:inline-block;padding:.1rem .5rem;border-radius:999px;font-size:.75rem;font-weight:500;background:#f4f4f5;color:#3f3f46}
+    .field{width:100%;border:1px solid #d4d4d8;border-radius:.5rem;padding:.5rem .65rem;font-size:.875rem;background:#fff}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace} .pre{white-space:pre-wrap}
+    .num{font-variant-numeric:tabular-nums}
+  </style>
+</head>
+<body class="bg-zinc-50 text-zinc-900">
+  <header class="border-b border-zinc-200 bg-white">
+    <nav class="max-w-6xl mx-auto px-4 h-14 flex items-center gap-6 text-sm">
+      <a href="/" class="font-semibold tracking-tight">ledger-agent</a>
+      <a href="/" class="text-zinc-600 hover:text-zinc-900">Overview</a>
+      <a href="/transactions" class="text-zinc-600 hover:text-zinc-900">Transactions</a>
+      <a href="/runs" class="text-zinc-600 hover:text-zinc-900">Questions</a>
+      <a href="/rules" class="text-zinc-600 hover:text-zinc-900">Rules</a>
+      <a href="/connect" class="text-zinc-600 hover:text-zinc-900 ml-auto">Accounts</a>
+    </nav>
+  </header>
+  {% if status.message %}<div class="max-w-6xl mx-auto px-4 pt-4">{% include "_status.html" %}</div>{% endif %}
+  <main class="max-w-6xl mx-auto px-4 py-6">{% block content %}{% endblock %}</main>
+</body>
+</html>

@@ -1,0 +1,5 @@
+<form method="post" action="/ask" class="flex gap-2">
+  {% if parent %}<input type="hidden" name="parent" value="{{ parent }}">{% endif %}
+  <input name="question" required class="field" placeholder="{{ placeholder or 'Ask anything about your money, e.g. “Why was my spending higher last month?”' }}">
+  <button class="btn btn-primary shrink-0">Ask</button>
+</form>

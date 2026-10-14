@@ -1,0 +1,13 @@
+{%- set styles = {"question": ("Question", "bg-white"), "thinking": ("Thinking", "bg-violet-50 border-violet-200"),
+  "text": ("Agent", "bg-white"), "tool_call": ("Tool call", "bg-sky-50 border-sky-200"), "tool_result": ("Result", "bg-zinc-50"),
+  "check": ("Number checker", "bg-amber-50 border-amber-300"), "final": ("Answer", "bg-emerald-50 border-emerald-300"),
+  "error": ("Error", "bg-red-50 border-red-300")} -%}
+{%- set label, cls = styles.get(st.kind, (st.kind, "bg-white")) -%}
+{%- set cls = "bg-emerald-50 border-emerald-300" if st.kind == "check" and "verified ✓" in st.content else cls -%}
+<div class="border border-zinc-200 rounded-lg px-3 py-2 {{ cls }}">
+  <div class="text-xs font-medium text-zinc-500 mb-1">{{ label }}{% if st.name and st.kind != "check" %} · <span class="mono">{{ st.name }}</span>{% endif %}</div>
+  {%- if st.kind in ("tool_call", "tool_result") -%}
+    {%- if st.content|length > 700 -%}<details><summary class="text-xs text-zinc-500 cursor-pointer mono">{{ st.content[:140] }}…</summary><pre class="text-xs mono pre mt-1">{{ st.content }}</pre></details>
+    {%- else -%}<pre class="text-xs mono pre">{{ st.content }}</pre>{%- endif -%}
+  {%- else -%}<div class="text-sm pre">{{ st.content }}</div>{%- endif -%}
+</div>
