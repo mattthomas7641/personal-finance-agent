@@ -53,7 +53,7 @@ def maybe_weekly_digest(now: dt.datetime | None = None) -> int | None:
     from app.web.routes.agent import spent_today
 
     now = now or dt.datetime.now(dt.timezone.utc)
-    if local_only() or not os.environ.get("ANTHROPIC_API_KEY"):
+    if local_only() or not os.environ.get("ANTHROPIC_API_KEY") or not (load_config().get("agent") or {}).get("weekly_digest", True):
         return None
     with session() as s:
         if s.exec(select(Txn)).first() is None:

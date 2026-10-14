@@ -7,6 +7,7 @@ agent:
   max_turns: 16
   max_cost_usd: 0.50     # per question
   daily_cost_usd: 2.00   # all questions in a day
+  weekly_digest: true    # write a number-checked summary every 7 days (false to turn off)
 budgets:            # monthly, by category
   Dining: 400
   Groceries: 600
