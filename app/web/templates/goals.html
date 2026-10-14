@@ -61,7 +61,8 @@
 
   <!-- Goals -->
   <section id="goals" class="card p-4 sm:p-5">
-    <h2 class="font-semibold mb-2">Savings &amp; retirement goals</h2>
+    <h2 class="font-semibold mb-1">Savings goals</h2>
+    <p class="text-sm text-zinc-500 mb-2">Retirement, Roth IRA and Coast FIRE live on the <a class="underline" href="/retirement">Retirement page</a>.</p>
     {% for g in ov.goals %}
       <div class="border-t border-zinc-100 py-3">
         <div class="flex justify-between items-baseline"><span class="font-medium">{{ g.name }}</span>
@@ -84,12 +85,12 @@
     <details class="mt-3" {% if not ov.goals %}open{% endif %}><summary class="text-sm cursor-pointer text-zinc-600">Add a goal</summary>
       <form method="post" action="/goals/new" class="grid grid-cols-2 gap-2 mt-3 text-sm">
         <label class="col-span-2">Name<input name="name" required class="field mt-1" placeholder="Emergency fund"></label>
-        <label>Type<select name="kind" class="field mt-1"><option value="savings">Savings</option><option value="retirement">Retirement</option></select></label>
+        <input type="hidden" name="kind" value="savings">
         <label>Target amount<input name="target_amount" required class="field mt-1" inputmode="decimal"></label>
         <label>By<input type="date" name="target_date" required class="field mt-1"></label>
         <label>Saved so far<input name="current_amount" class="field mt-1" inputmode="decimal" value="0"></label>
         <label>Adding per month<input name="monthly_contribution" class="field mt-1" inputmode="decimal" value="0"></label>
-        <label>Return assumption % (retirement)<input name="expected_return_pct" class="field mt-1" inputmode="decimal" value="5"></label>
+
         <button class="btn btn-primary col-span-2">Add goal</button>
       </form>
     </details>
@@ -101,7 +102,7 @@
     {% set p = ov.plan %}
     {% if p %}
       <p class="text-sm text-zinc-600 mt-1">You need about <b>{{ p.target_monthly|money }}/month</b> more
-        {% if ov.monthly_needed_for_401k %}({{ ov.monthly_needed_for_401k|money }} of it is the take-home drop from a higher 401(k) %){% endif %}.
+        {% set parts = [] %}{% if ov.monthly_needed_for_401k %}{% set _ = parts.append((ov.monthly_needed_for_401k|money) ~ " take-home drop from a higher 401(k) %") %}{% endif %}{% if ov.monthly_needed_for_roth %}{% set _ = parts.append((ov.monthly_needed_for_roth|money) ~ " to max your Roth IRA by Dec 31") %}{% endif %}{% if ov.monthly_needed_for_retirement %}{% set _ = parts.append((ov.monthly_needed_for_retirement|money) ~ " to close your retirement gap") %}{% endif %}{% if parts %}, including {{ parts|join(", ") }}{% endif %}.
         {{ p.from_surplus|money }} can come from what's left over each month (keeping half your surplus as a buffer){% if p.cuts %}, and {{ p.from_cuts|money }} from these trims{% endif %}.</p>
       {% if p.cuts %}
       <table class="w-full text-sm mt-3"><thead class="text-zinc-500 text-left"><tr><th class="py-1">Category</th><th class="text-right">Avg/mo</th><th class="text-right">New limit</th><th class="text-right">Saves</th><th class="pl-4 hidden sm:table-cell">Why</th></tr></thead>

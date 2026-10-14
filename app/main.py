@@ -21,7 +21,8 @@ from app.categorize import categorize_pending, correct
 from app.config import CATEGORIES, NON_SPEND, load_config
 from app.db import init_db, session
 from app.ingest import sources
-from app.models import Account, AgentRun, AgentStep, Budget, Goal, Outbound, PlaidItem, Plan401k, Rule, Txn
+from app.models import Account, AgentRun, AgentStep, Budget, Goal, Outbound, PlaidItem, Plan401k, RetirementAccount, RetirementPlan, Rule, Txn
+from app import retirement
 from app import planning
 import datetime as dt
 from app import privacy, security
@@ -95,6 +96,7 @@ async def access_guard(request: Request, call_next):
         return RedirectResponse(f"/login?next={quote(str(request.url.path))}", status_code=303)
     return await call_next(request)
 templates.env.filters["money"] = lambda v: "" if v is None else (f"-${abs(v):,.2f}" if v < 0 else f"${v:,.2f}")
+templates.env.filters["money0"] = lambda v: "" if v is None else (f"-${abs(v):,.0f}" if v < 0 else f"${v:,.0f}")
 
 
 def render(request, name, **ctx):
@@ -516,6 +518,59 @@ async def budgets_save(request: Request):
                 s.merge(Budget(category=cat, monthly_limit=_num(v), source="manual"))
         s.commit()
     return back("/goals?saved=budgets#budgets")
+
+
+# ---------------- retirement ----------------
+
+@app.get("/retirement", response_class=HTMLResponse)
+def retirement_page(request: Request, saved: str = ""):
+    with session() as s:
+        plan = s.get(RetirementPlan, 1) or RetirementPlan()
+        k = s.get(Plan401k, 1)
+        accounts = s.exec(select(RetirementAccount).order_by(RetirementAccount.id)).all()
+    return render(request, "retirement.html", ov=retirement.overview(), plan=plan, k401=k, accounts=accounts,
+                  saved=saved, today=dt.date.today(), trailing=retirement.trailing_annual_spending())
+
+
+@app.post("/retirement/plan")
+def retirement_plan_save(birth_year: str = Form(""), retirement_age: str = Form("60"), annual_spending: str = Form(""),
+                         withdrawal_rate_pct: str = Form("4"), expected_return_pct: str = Form("5"),
+                         filing_status: str = Form("single"), magi: str = Form(""), roth_contributed: str = Form("0"),
+                         roth_detect_pattern: str = Form(""), roth_target: str = Form(""), include_gap_in_plan: str = Form("")):
+    with session() as s:
+        s.merge(RetirementPlan(
+            id=1, birth_year=int(birth_year) if birth_year.strip() else None,
+            retirement_age=int(_num(retirement_age, 60)), annual_spending=_num(annual_spending) if annual_spending.strip() else None,
+            withdrawal_rate_pct=_num(withdrawal_rate_pct, 4) or 4, expected_return_pct=_num(expected_return_pct, 5),
+            filing_status=filing_status if filing_status in ("single", "mfj", "mfs") else "single",
+            magi=_num(magi) if magi.strip() else None, roth_contributed=_num(roth_contributed),
+            roth_detect_pattern=roth_detect_pattern.strip(), roth_target=bool(roth_target),
+            include_gap_in_plan=bool(include_gap_in_plan)))
+        s.commit()
+    return back("/retirement?saved=1")
+
+
+@app.post("/retirement/accounts")
+def retirement_account_add(name: str = Form(...), kind: str = Form("other"), balance: str = Form("0"),
+                           monthly_contribution: str = Form("0")):
+    with session() as s:
+        s.add(RetirementAccount(name=name.strip(), kind=kind, balance=_num(balance),
+                                monthly_contribution=_num(monthly_contribution), as_of=dt.date.today()))
+        s.commit()
+    return back("/retirement#accounts")
+
+
+@app.post("/retirement/accounts/{aid}")
+def retirement_account_update(aid: int, balance: str = Form(...), monthly_contribution: str = Form("0"), delete: str = Form("")):
+    with session() as s:
+        a = s.get(RetirementAccount, aid)
+        if a and delete:
+            s.delete(a)
+        elif a:
+            a.balance, a.monthly_contribution, a.as_of = _num(balance), _num(monthly_contribution), dt.date.today()
+            s.add(a)
+        s.commit()
+    return back("/retirement#accounts")
 
 
 # ---------------- rules ----------------

@@ -76,6 +76,33 @@ class Plan401k(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=now)
 
 
+class RetirementPlan(SQLModel, table=True):
+    """Assumptions for retirement, Roth IRA and Coast FIRE tracking. All editable on the Retirement page."""
+    id: int = Field(default=1, primary_key=True)
+    birth_year: Optional[int] = None  # falls back to the 401(k) plan's birth year
+    retirement_age: int = 60
+    annual_spending: Optional[float] = None  # in retirement, today's dollars; None = your last 12 months of spending
+    withdrawal_rate_pct: float = 4.0
+    expected_return_pct: float = 5.0  # after inflation
+    # Roth IRA
+    filing_status: str = "single"  # single | mfj | mfs
+    magi: Optional[float] = None  # modified adjusted gross income; None = estimate from 401(k) salary minus deferrals
+    roth_target: bool = True  # include maxing the Roth in the budget plan
+    roth_contributed: float = 0  # this tax year, if not auto-detected
+    roth_detect_pattern: str = ""  # e.g. "FIDELITY" or "VANGUARD ROTH": sum matching transfers this year instead
+    include_gap_in_plan: bool = False  # add the retirement shortfall to the budget plan
+    updated_at: datetime = Field(default_factory=now)
+
+
+class RetirementAccount(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    kind: str = "other"  # 401k | roth_ira | traditional_ira | brokerage | hsa | other
+    balance: float = 0
+    monthly_contribution: float = 0  # ignored for 401k (taken from the 401(k) plan) and Roth IRA (from the Roth tracker)
+    as_of: Optional[dt.date] = None
+
+
 class Goal(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str

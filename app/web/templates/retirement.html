@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Retirement · Northstar{% endblock %}
+{% block content %}
+{% set r = ov.retirement %}{% set roth = ov.roth %}
+<div class="flex items-end justify-between flex-wrap gap-2 mb-4">
+  <div><h1 class="text-xl font-semibold">Retirement</h1>
+    <p class="text-sm text-zinc-500">{{ ov.disclaimer }}</p></div>
+  {% if saved %}<span class="text-sm text-emerald-700">Saved ✓</span>{% endif %}
+</div>
+
+{% if r %}
+<div class="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
+  <div class="card p-3 sm:p-4"><div class="text-xs text-zinc-500">FI number</div><div class="text-[15px] sm:text-2xl font-semibold num mt-1">{{ r.fi_number|money0 }}</div>
+    <div class="text-[11px] text-zinc-400 mt-1 hidden sm:block">{{ r.annual_spending|money0 }}/yr ÷ {{ r.withdrawal_rate_pct }}%</div></div>
+  <div class="card p-3 sm:p-4"><div class="text-xs text-zinc-500">Coast FIRE number</div><div class="text-[15px] sm:text-2xl font-semibold num mt-1">{{ r.coast_number|money0 }}</div>
+    <div class="text-[11px] text-zinc-400 mt-1 hidden sm:block">needed today to coast to {{ r.retirement_age }}</div></div>
+  <div class="card p-3 sm:p-4"><div class="text-xs text-zinc-500">Invested now</div><div class="text-[15px] sm:text-2xl font-semibold num mt-1">{{ r.invested|money0 }}</div>
+    <div class="text-[11px] text-zinc-400 mt-1 hidden sm:block">{{ r.progress_pct }}% of FI</div></div>
+</div>
+{% endif %}
+
+<div class="grid lg:grid-cols-2 gap-4">
+  <section class="card p-4 sm:p-5">
+    <h2 class="font-semibold">Coast FIRE</h2>
+    {% if r %}
+      <p class="text-sm text-zinc-600 mt-1">The amount where you could stop contributing and growth alone would reach your FI number by {{ r.retirement_age }}, at {{ r.expected_return_pct }}%/yr after inflation.</p>
+      <div class="flex justify-between text-sm mt-3"><span>{{ r.invested|money0 }} invested</span><span class="num">{{ r.coast_number|money0 }}</span></div>
+      <div class="h-2.5 rounded bg-zinc-100 mt-1"><div class="h-2.5 rounded {{ 'bg-emerald-600' if r.coast_reached else 'bg-zinc-900' }}" style="width: {{ r.coast_progress_pct }}%"></div></div>
+      <div class="mt-3 rounded-lg p-3 text-sm {{ 'bg-emerald-50 text-emerald-900' if r.coast_reached else 'bg-zinc-50 text-zinc-800' }}">
+        {% if r.coast_reached %}✓ You've reached Coast FIRE. Even with no new contributions, you're projected to reach your FI number by {{ r.retirement_age }}.
+        {% elif r.coast_age %}At {{ r.monthly_contributions|money }}/month you reach Coast FIRE around <b>age {{ r.coast_age }}</b>.
+        {% else %}At your current contributions you don't reach Coast FIRE before {{ r.retirement_age }}.{% endif %}
+      </div>
+    {% else %}<p class="text-sm text-zinc-600 mt-1">Add your birth year and account balances below to see this.</p>{% endif %}
+  </section>
+
+  <section class="card p-4 sm:p-5">
+    <h2 class="font-semibold">On track to retire at {{ r.retirement_age if r else plan.retirement_age }}?</h2>
+    {% if r %}
+      <div class="flex justify-between text-sm mt-3"><span>Projected at {{ r.retirement_age }}</span><span class="num font-medium">{{ r.projected_at_retirement|money0 }}</span></div>
+      <div class="h-2.5 rounded bg-zinc-100 mt-1"><div class="h-2.5 rounded {{ 'bg-emerald-600' if r.on_track else 'bg-amber-500' }}" style="width: {{ [100, (r.projected_at_retirement / r.fi_number * 100) if r.fi_number else 0]|min }}%"></div></div>
+      <div class="text-xs text-zinc-500 mt-1">FI number {{ r.fi_number|money0 }} · {{ r.years_to_retirement|round(1) }} years away</div>
+      <div class="mt-3 rounded-lg p-3 text-sm {{ 'bg-emerald-50 text-emerald-900' if r.on_track else 'bg-amber-50 text-amber-900' }}">
+        {% if r.on_track %}On track{% if r.fi_age %}: you reach your FI number around <b>age {{ r.fi_age }}</b>{% endif %}.
+        {% else %}Needs about <b>{{ r.required_monthly|money }}/month</b> invested; you're at {{ r.monthly_contributions|money }}. Gap: <b>{{ r.monthly_gap|money }}/month</b>.{% if r.fi_age %} At this pace you reach it around age {{ r.fi_age }}.{% endif %}{% endif %}
+      </div>
+      <dl class="text-sm mt-3 space-y-1">
+        {% for k, v in r.contribution_breakdown.items() %}<div class="flex justify-between"><dt class="text-zinc-500">{{ k }}</dt><dd class="num">{{ v|money }}/mo</dd></div>{% endfor %}
+      </dl>
+      <p class="text-xs text-zinc-500 mt-2">Spending in retirement: {{ r.annual_spending|money0 }}/yr, from {{ r.spending_source }}.</p>
+      {% for n in r.notes %}<p class="text-sm text-amber-800 mt-1">⚠ {{ n }}</p>{% endfor %}
+    {% else %}<p class="text-sm text-zinc-600 mt-1">Add your birth year and balances below.</p>{% endif %}
+  </section>
+
+  <section class="card p-4 sm:p-5">
+    <h2 class="font-semibold">Roth IRA {{ roth.tax_year }}</h2>
+    <div class="flex justify-between text-sm mt-3"><span>{{ roth.contributed|money }} contributed</span><span class="num">allowed {{ roth.allowed|money }}</span></div>
+    <div class="h-2.5 rounded bg-zinc-100 mt-1"><div class="h-2.5 rounded {{ 'bg-emerald-600' if roth.maxed else 'bg-zinc-900' }}" style="width: {{ [100, (roth.contributed / roth.allowed * 100) if roth.allowed else 0]|min }}%"></div></div>
+    <div class="text-xs text-zinc-500 mt-1">{{ roth.limit_note }} · {{ roth.contributions_source }}</div>
+    <div class="mt-3 rounded-lg p-3 text-sm {{ 'bg-emerald-50 text-emerald-900' if roth.maxed else 'bg-zinc-50 text-zinc-800' }}">
+      {% if roth.maxed %}✓ Maxed for {{ roth.tax_year }}.
+      {% elif roth.allowed == 0 %}No direct contributions allowed at this income.
+      {% else %}{{ roth.remaining|money }} left. That's <b>{{ roth.monthly_to_max_by_dec|money }}/month</b> to finish by Dec 31, or {{ roth.monthly_to_max_by_deadline|money }}/month by the {{ roth.deadline }} deadline.{% endif %}
+    </div>
+    {% for n in roth.notes %}<p class="text-sm text-amber-800 mt-1">⚠ {{ n }}</p>{% endfor %}
+  </section>
+
+  <section id="accounts" class="card p-4 sm:p-5">
+    <h2 class="font-semibold mb-2">Accounts</h2>
+    {% for a in accounts %}
+      <form method="post" action="/retirement/accounts/{{ a.id }}" class="flex flex-wrap items-end gap-2 border-t border-zinc-100 py-2 text-sm">
+        <span class="flex-1 min-w-[8rem]">{{ a.name }} <span class="pill">{{ a.kind }}</span>{% if a.as_of %}<span class="text-xs text-zinc-400"> · {{ a.as_of }}</span>{% endif %}</span>
+        <label class="w-28">Balance<input name="balance" class="field mt-1" inputmode="decimal" value="{{ a.balance|round|int }}"></label>
+        {% if a.kind not in ("401k", "roth_ira") %}<label class="w-28">Adding/mo<input name="monthly_contribution" class="field mt-1" inputmode="decimal" value="{{ a.monthly_contribution|round|int }}"></label>{% endif %}
+        <button class="btn">Update</button><button name="delete" value="1" class="text-xs text-zinc-400 underline">remove</button>
+      </form>
+    {% else %}<p class="text-sm text-zinc-500">No accounts yet.</p>{% endfor %}
+    <form method="post" action="/retirement/accounts" class="grid grid-cols-2 gap-2 mt-3 text-sm">
+      <label class="col-span-2">Name<input name="name" required class="field mt-1" placeholder="Fidelity 401(k)"></label>
+      <label>Type<select name="kind" class="field mt-1">
+        {% for v, l in [("401k", "401(k)"), ("roth_ira", "Roth IRA"), ("traditional_ira", "Traditional IRA"), ("brokerage", "Brokerage"), ("hsa", "HSA"), ("other", "Other")] %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></label>
+      <label>Balance<input name="balance" class="field mt-1" inputmode="decimal"></label>
+      <label class="col-span-2">Adding per month <span class="text-zinc-400">(brokerage/HSA/other only; 401(k) and Roth come from their trackers)</span><input name="monthly_contribution" class="field mt-1" inputmode="decimal" value="0"></label>
+      <button class="btn btn-primary col-span-2">Add account</button>
+    </form>
+  </section>
+
+  <section class="card p-4 sm:p-5 lg:col-span-2">
+    <details {% if not r %}open{% endif %}><summary class="font-semibold cursor-pointer">Assumptions</summary>
+      <form method="post" action="/retirement/plan" class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-sm">
+        <label>Birth year<input name="birth_year" class="field mt-1" inputmode="numeric" value="{{ plan.birth_year or (k401.birth_year if k401 else '') or '' }}"></label>
+        <label>Retire at age<input name="retirement_age" class="field mt-1" inputmode="numeric" value="{{ plan.retirement_age }}"></label>
+        <label>Spending in retirement /yr<input name="annual_spending" class="field mt-1" inputmode="decimal" placeholder="{{ trailing|round|int }} (last 12 mo)" value="{{ plan.annual_spending|round|int if plan.annual_spending else '' }}"></label>
+        <label>Withdrawal rate %<input name="withdrawal_rate_pct" class="field mt-1" inputmode="decimal" value="{{ plan.withdrawal_rate_pct }}"></label>
+        <label>Return after inflation %<input name="expected_return_pct" class="field mt-1" inputmode="decimal" value="{{ plan.expected_return_pct }}"></label>
+        <label>Tax filing status<select name="filing_status" class="field mt-1">
+          {% for v, l in [("single", "Single / head of household"), ("mfj", "Married filing jointly"), ("mfs", "Married filing separately")] %}<option value="{{ v }}" {% if plan.filing_status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+        <label>MAGI (income) <span class="text-zinc-400">optional</span><input name="magi" class="field mt-1" inputmode="decimal" value="{{ plan.magi|round|int if plan.magi else '' }}"></label>
+        <label>Roth contributed this year<input name="roth_contributed" class="field mt-1" inputmode="decimal" value="{{ plan.roth_contributed|round|int if plan.roth_contributed else '' }}"></label>
+        <label class="col-span-2">…or auto-detect from transfers containing <span class="text-zinc-400">(e.g. FIDELITY ROTH)</span><input name="roth_detect_pattern" class="field mt-1" value="{{ plan.roth_detect_pattern }}"></label>
+        <label class="flex items-center gap-2 mt-6"><input type="checkbox" name="roth_target" value="1" {% if plan.roth_target %}checked{% endif %}> Plan to max my Roth IRA</label>
+        <label class="flex items-center gap-2 mt-6"><input type="checkbox" name="include_gap_in_plan" value="1" {% if plan.include_gap_in_plan %}checked{% endif %}> Add retirement gap to my budget plan</label>
+        <button class="btn btn-primary col-span-2 sm:col-span-4">Save assumptions</button>
+      </form>
+      <p class="text-xs text-zinc-500 mt-2">FI number = yearly spending ÷ withdrawal rate (4% ≈ ×25). Coast FIRE number = FI number ÷ (1 + return)^years to retirement. Returns are your assumption; real markets vary.</p>
+    </details>
+  </section>
+</div>
+{% endblock %}
