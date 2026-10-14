@@ -3,7 +3,8 @@
 Allowed sources: SQL results, calculator outputs, and the user's question. A number in the answer
 matches a source value if it is that value rounded to the answer's precision (so "$1,234" matches
 1234.49 and "12.5%" matches 12.4999), ignoring sign ("spent $40" vs amount -40 for income), with
-k/M suffixes expanded. Dates, years and ordinals are not treated as claims.
+k/M suffixes expanded. Dates, years and ordinals are not treated as claims, and
+dates/times in tool results are not treated as evidence.
 """
 from __future__ import annotations
 
@@ -17,6 +18,9 @@ DATE_LIKE = re.compile(
     r"\b\d{1,2}(?:st|nd|rd|th)\b|\bQ[1-4]\b|\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b",
 )
 SOURCE_NUM = re.compile(r"-?\d+(?:\.\d+)?(?:e[+-]?\d+)?")
+# Dates and times inside tool results aren't evidence: otherwise every "2026-08-27" would "support" any
+# count from 1 to 31 and the checker couldn't catch a wrong small number.
+SOURCE_DATES = re.compile(r"\b\d{4}-\d{2}(?:-\d{2})?(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:[+-]\d{2}:?\d{2}|Z)?)?\b|\b\d{1,2}:\d{2}(?::\d{2})?\b")
 
 
 @dataclass
@@ -40,7 +44,7 @@ def claims(answer: str) -> list[Claim]:
 def source_values(texts: list[str]) -> list[float]:
     vals = []
     for t in texts:
-        for m in SOURCE_NUM.findall(t.replace(",", "")):
+        for m in SOURCE_NUM.findall(SOURCE_DATES.sub(" ", t).replace(",", "")):
             try:
                 vals.append(abs(float(m)))
             except ValueError:
@@ -50,11 +54,11 @@ def source_values(texts: list[str]) -> list[float]:
 
 def supported(c: Claim, sources: list[float]) -> bool:
     target = abs(c.value)
+    d = c.decimals
     for v in sources:
         x = v / c.scale
-        for d in range(c.decimals, c.decimals + 1):
-            if round(x, d) == round(target, d) or abs(x - target) <= 0.5 * 10 ** -d + 1e-9:
-                return True
+        if round(x, d) == round(target, d) or abs(x - target) <= 0.5 * 10 ** -d + 1e-9:
+            return True
     return False
 
 

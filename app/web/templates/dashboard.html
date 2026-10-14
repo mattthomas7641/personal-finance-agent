@@ -9,10 +9,11 @@
 {% endcall %}
 
 {% for it in attention %}
-  {% call alert("warn" if it.status == "expiring" else "bad", "mb-3") %}
-    {% if it.status == "expiring" %}{{ it.institution or "A bank" }}'s connection expires {{ it.consent_expires.strftime("%b %d") if it.consent_expires else "soon" }}.
+  {% call alert("warn" if it.status in ("expiring", "unavailable") else "bad", "mb-3") %}
+    {% if it.status == "unavailable" %}Couldn't reach {{ it.institution or "a bank" }} through Plaid on the last sync. Northstar will retry; nothing to do yet.
+    {% elif it.status == "expiring" %}{{ it.institution or "A bank" }}'s connection expires {{ it.consent_expires.strftime("%b %d") if it.consent_expires else "soon" }}.
     {% else %}{{ it.institution or "A bank" }} stopped syncing and needs you to log in again.{% endif %}
-    <a href="/connect#banks" class="font-medium underline">Reconnect</a>
+    {% if it.status != "unavailable" %}<a href="/connect#banks" class="font-medium underline">Reconnect</a>{% endif %}
   {% endcall %}
 {% endfor %}
 

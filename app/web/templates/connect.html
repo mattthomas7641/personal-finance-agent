@@ -20,10 +20,10 @@
       {% for it in items %}
         <tr>
           <td><span class="font-medium">{{ it.institution or "Bank" }}</span>{% if it.error_message and it.status != "ok" %}<div class="text-[12px] c-muted">{{ it.error_message }}</div>{% endif %}</td>
-          <td>{% if it.status == "ok" %}{{ badge("Syncing", "ok") }}{% elif it.status == "expiring" %}{{ badge("Expires " ~ (it.consent_expires.strftime("%b %d") if it.consent_expires else "soon"), "warn") }}{% elif it.status == "login_required" %}{{ badge("Needs login", "bad") }}{% else %}{{ badge("Error", "bad") }}{% endif %}</td>
+          <td>{% if it.status == "ok" %}{{ badge("Syncing", "ok") }}{% elif it.status == "expiring" %}{{ badge("Expires " ~ (it.consent_expires.strftime("%b %d") if it.consent_expires else "soon"), "warn") }}{% elif it.status == "login_required" %}{{ badge("Needs login", "bad") }}{% elif it.status == "unavailable" %}{{ badge("Retrying", "warn") }}{% else %}{{ badge("Error", "bad") }}{% endif %}</td>
           <td class="hidden sm:table-cell c-muted text-[13px]">{{ it.last_synced.strftime("%b %d, %H:%M") if it.last_synced else "Never" }}</td>
           <td class="r"><div class="inline-flex flex-wrap justify-end items-center gap-2">
-            {% if it.status != "ok" %}<button type="button" class="btn btn-sm btn-primary" onclick="reconnect('{{ it.id }}')">Reconnect</button>{% endif %}
+            {% if it.status not in ("ok", "unavailable") %}<button type="button" class="btn btn-sm btn-primary" onclick="reconnect('{{ it.id }}')">Reconnect</button>{% endif %}
             <form method="post" action="/connect/{{ it.id }}/disconnect" class="inline-flex items-center gap-2" onsubmit="return confirm('Disconnect {{ (it.institution or 'this bank')|e }}? Plaid will stop syncing it.')">
               <label class="text-[12px] c-muted hidden sm:flex items-center gap-1"><input type="checkbox" name="keep_history" value="1" checked> Keep history</label>
               <button class="btn btn-sm btn-danger">Disconnect</button></form></div></td>

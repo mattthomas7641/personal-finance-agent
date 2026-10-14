@@ -2,14 +2,25 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import time
 from contextlib import contextmanager
 
+from sqlalchemy import event
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.config import DATA_DIR
 
 DB_PATH = os.environ.get("LEDGER_DB", str(DATA_DIR / "ledger.db"))
-engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
+engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False, "timeout": 10})
+
+
+@event.listens_for(engine, "connect")
+def _sqlite_pragmas(dbapi_conn, _):
+    # WAL lets the agent's read-only queries run while a sync is writing; busy_timeout waits instead of failing.
+    cur = dbapi_conn.cursor()
+    cur.execute("PRAGMA journal_mode=WAL")
+    cur.execute("PRAGMA busy_timeout=10000")
+    cur.close()
 
 # What the agent sees. Spending is positive, income negative (Plaid convention).
 AGENT_VIEW = """
@@ -76,8 +87,10 @@ def migrate_tokens_to_keychain() -> None:
                 try:
                     item.access_token = store_secret(item.id, item.access_token)
                     s.add(item)
-                except Exception:
-                    pass  # no keychain available (e.g. headless Linux): leave as-is
+                except Exception as e:  # no keychain (e.g. headless Linux): keep working, but say so loudly
+                    import logging
+                    logging.getLogger(__name__).error("Could not move the Plaid token for %s into the Keychain: %s. "
+                                                      "It stays in the database until this succeeds.", item.institution or item.id, e)
         s.commit()
 
 
@@ -87,10 +100,18 @@ def session():
         yield s
 
 
-def readonly_conn() -> sqlite3.Connection:
+QUERY_SECONDS = 3.0           # agent queries are aggregates over a few thousand rows; anything slower is a mistake
+MAX_VALUE_BYTES = 1_000_000   # caps zeroblob()/printf()/group_concat() blow-ups
+
+
+def readonly_conn(timeout: float = QUERY_SECONDS) -> sqlite3.Connection:
     """Connection for agent SQL: opened read-only, and an authorizer allows only reads of the
-    `transactions` view (no access to plaid tokens, no writes, no ATTACH, no PRAGMA)."""
-    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, check_same_thread=False)
+    `transactions` view (no access to plaid tokens, no writes, no ATTACH, no PRAGMA).
+    A progress handler interrupts any query that runs longer than `timeout` seconds."""
+    conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, check_same_thread=False, timeout=2)
+    conn.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, MAX_VALUE_BYTES)
+    deadline = time.monotonic() + timeout
+    conn.set_progress_handler(lambda: 1 if time.monotonic() > deadline else 0, 10_000)
     allowed_tables = {"transactions", "txn", "account"}  # the view reads txn/account internally
 
     def auth(action, arg1, arg2, dbname, source):

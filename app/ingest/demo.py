@@ -24,7 +24,7 @@ class DemoTxn:
 
     @property
     def id(self) -> str:
-        return "demo_" + hashlib.sha1(f"{self.date}|{self.amount}|{self.raw_name}|{self.account}".encode()).hexdigest()[:16]
+        return "demo_" + hashlib.sha1(f"{self.date}|{self.amount}|{self.raw_name}|{self.account}".encode(), usedforsecurity=False).hexdigest()[:16]
 
 
 # (descriptor templates, category, (min, max) amount, weekly frequency)

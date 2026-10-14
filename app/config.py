@@ -8,6 +8,11 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("LEDGER_DATA", ROOT / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    DATA_DIR.chmod(0o700)  # bank data: readable by this macOS user only
+except OSError:
+    pass
+os.umask(0o077)  # files created from here on (database, logs, auth.json) are private too
 
 env = ROOT / ".env"
 if env.exists():

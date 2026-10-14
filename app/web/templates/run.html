@@ -4,7 +4,7 @@
 {% block content %}
 <a href="/runs" class="hint hover:underline">Questions</a>
 <div class="page-h mt-1"><div class="min-w-0"><h1>{{ run.question }}</h1>
-  <p>{{ run.turns }} steps · ${{ "%.3f"|format(run.cost_usd) }}</p></div>
+  <p>{{ run.turns }} steps · ${{ "%.3f"|format(run.cost_usd) }}{% if run.model %} · {{ run.model.replace("claude-", "").replace(",", " → ") }}{% endif %}</p></div>
   <div>{% if run.status == "running" %}{{ badge("Running", "info") }}{% elif run.verified %}{{ badge("Verified", "ok") }}{% elif run.status == "done" %}{{ badge("Unverified", "warn") }}{% else %}{{ badge(run.status|capitalize, "bad") }}{% endif %}</div></div>
 
 {% if run.status != "running" %}

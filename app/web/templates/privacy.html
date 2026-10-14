@@ -44,8 +44,8 @@
     <p class="hint mb-3 max-w-[80ch]">Only this Mac and your own devices on Tailscale can open Northstar, and phones need the passcode. Pages you open on your phone are saved there, so you can see your last-synced numbers when the Mac is off.</p>
     {% if is_local %}
       <form method="post" action="/security/passcode" class="grid sm:grid-cols-3 gap-3 mb-4 max-w-3xl">
-        <input type="password" name="passcode" required minlength="6" class="field" aria-label="New passcode" placeholder="{{ 'New passcode' if has_passcode else 'Choose a passcode (6+ characters)' }}">
-        <input type="password" name="confirm" required minlength="6" class="field" aria-label="Repeat passcode" placeholder="Repeat it">
+        <input type="password" name="passcode" required minlength="10" class="field" aria-label="New passcode" placeholder="{{ 'New passcode' if has_passcode else 'Choose a passcode (10+ characters)' }}">
+        <input type="password" name="confirm" required minlength="10" class="field" aria-label="Repeat passcode" placeholder="Repeat it">
         <button class="btn btn-primary">{{ "Change passcode" if has_passcode else "Set passcode" }}</button>
       </form>
     {% else %}<p class="text-[13.5px] mb-4">Signed in on this device. <a class="link" href="/logout">Sign out and delete offline copies</a></p>{% endif %}

@@ -7,6 +7,7 @@ dependencies = ["anthropic>=1.13", "plaid-python>=45", "fastapi", "uvicorn[stand
 
 [project.optional-dependencies]
 dev = ["pytest", "playwright"]
+# Exact tested versions live in requirements.lock (pip install -r requirements.lock); Dependabot keeps it current.
 
 [build-system]
 requires = ["setuptools>=68"]
