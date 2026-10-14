@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Privacy</h1>
+<p class="text-sm text-zinc-600 mb-4">Your data is stored only on this computer. Below is exactly what may be sent to the Claude API, and a log of everything that has been.</p>
+
+<div class="grid md:grid-cols-2 gap-4">
+  <form method="post" action="/privacy" class="card p-5 space-y-3">
+    <h2 class="font-semibold">What gets sent</h2>
+    <label class="flex gap-3 items-start text-sm"><input type="radio" name="mode" value="standard" {% if mode != "local_only" %}checked{% endif %} class="mt-1">
+      <span><b>Standard</b>: new transaction descriptions are scrubbed, then sent to Claude to categorize them. Questions you ask send scrubbed query results.</span></label>
+    <label class="flex gap-3 items-start text-sm"><input type="radio" name="mode" value="local_only" {% if mode == "local_only" %}checked{% endif %} class="mt-1">
+      <span><b>Local only</b>: categorization uses your rules, built-in rules and Plaid's categories. Nothing is sent unless you ask a question or click "Categorize with AI".</span></label>
+    <div>
+      <div class="text-sm font-medium mb-1">Always remove these words (one per line)</div>
+      <textarea name="terms" rows="4" class="field mono text-xs" placeholder="Your name&#10;Your street&#10;Your employer">{{ terms|join("\n") }}</textarea>
+      <p class="text-xs text-zinc-500 mt-1">People's names in Zelle/Venmo/Cash App, emails, phone numbers and card/account digits are always removed.</p>
+    </div>
+    <button class="btn btn-primary">Save</button>
+  </form>
+
+  <div class="card p-5 space-y-2">
+    <h2 class="font-semibold">Never sent</h2>
+    <ul class="text-sm list-disc pl-5 space-y-1 text-zinc-700">
+      <li>Bank logins (entered only in Plaid's window)</li>
+      <li>Plaid access tokens (stored in your macOS Keychain; the agent can't read them)</li>
+      <li>Full account or card numbers, internal transaction IDs</li>
+      <li>Anything when you're not categorizing or asking a question</li>
+    </ul>
+    {% if mode == "local_only" and uncategorized %}
+      <form method="post" action="/connect/categorize" class="pt-2"><input type="hidden" name="ai" value="1">
+        <button class="btn">Categorize {{ uncategorized }} with AI (sends scrubbed descriptions)</button></form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card p-5 mt-4">
+  <h2 class="font-semibold mb-1">Scrubbing preview</h2>
+  <p class="text-sm text-zinc-600 mb-2">How your descriptions look after scrubbing (only ones that changed).</p>
+  <table class="w-full text-xs mono"><tbody>
+  {% for before, after in changed %}<tr class="border-t border-zinc-100"><td class="py-1 text-zinc-500">{{ before }}</td><td class="py-1">→ {{ after }}</td></tr>
+  {% else %}<tr><td class="py-2 text-zinc-500">Nothing in your data needed scrubbing yet.</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+
+<div class="card p-5 mt-4">
+  <div class="flex items-center justify-between mb-2"><h2 class="font-semibold">Sent to Claude ({{ "{:,}".format(sent_chars) }} characters total)</h2>
+    <form method="post" action="/privacy/clear_log"><button class="text-xs text-zinc-500 underline">clear log</button></form></div>
+  {% for o in log %}
+    <details class="border-t border-zinc-100 py-1.5"><summary class="text-sm cursor-pointer"><span class="pill">{{ o.kind }}</span>
+      <span class="text-zinc-500 text-xs">{{ o.created_at.strftime("%b %d %H:%M") }} · {{ o.chars }} chars</span> <span class="mono text-xs">{{ o.text[:110] }}</span></summary>
+      <pre class="text-xs mono pre bg-zinc-50 rounded p-2 mt-1">{{ o.text }}</pre></details>
+  {% else %}<p class="text-sm text-zinc-500">Nothing has been sent yet.</p>{% endfor %}
+</div>
+{% endblock %}

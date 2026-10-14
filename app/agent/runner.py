@@ -18,6 +18,7 @@ from app.config import load_config
 from app.db import session
 from app.llm import client, cost, model
 from app.models import AgentRun, AgentStep
+from app.privacy import record
 
 log = logging.getLogger("agent")
 TASKS: set[asyncio.Task] = set()
@@ -139,6 +140,7 @@ class FinanceAgent:
         messages.append({"role": "user", "content": self.question})
         spent, rejections = 0.0, 0
         self.step("question", self.question)
+        record("question", self.question)
         try:
             for turn in range(1, max_turns + 1):
                 resp = await client().messages.create(
@@ -179,6 +181,7 @@ class FinanceAgent:
                         continue
                     out, is_err = self.call_tool(c.name, c.input)
                     self.step("tool_result", out, name=c.name)
+                    record("tool_result", f"[{c.name}] {out}")
                     results.append({"type": "tool_result", "tool_use_id": c.id, "content": out, "is_error": is_err})
                 messages.append({"role": "user", "content": results})
                 if final:

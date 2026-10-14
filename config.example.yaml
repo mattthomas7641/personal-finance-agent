@@ -10,3 +10,10 @@ budgets:            # monthly, by category
   Groceries: 600
   Shopping: 300
   Entertainment: 100
+privacy:
+  # standard: transaction descriptors are redacted, then sent to Claude for categorization.
+  # local_only: nothing is sent for categorization (rules, built-ins and Plaid categories only);
+  #             Claude is used only when you ask a question.
+  mode: standard
+  # Always replaced with [redacted] before anything is sent: your name, street, employer, etc.
+  redact_terms: []

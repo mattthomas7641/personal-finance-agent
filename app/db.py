@@ -13,8 +13,8 @@ engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread"
 
 # What the agent sees. Spending is positive, income negative (Plaid convention).
 AGENT_VIEW = """
-CREATE VIEW IF NOT EXISTS transactions AS
-SELECT t.id, t.date, strftime('%Y-%m', t.date) AS month, t.amount, t.merchant, t.raw_name AS description,
+CREATE VIEW transactions AS
+SELECT t.date, strftime('%Y-%m', t.date) AS month, t.amount, t.merchant, t.raw_name AS description,
        t.category, t.pending, a.name AS account, a.type AS account_type
 FROM txn t LEFT JOIN account a ON a.id = t.account_id
 """
@@ -25,7 +25,26 @@ def init_db() -> None:
 
     SQLModel.metadata.create_all(engine)
     with engine.begin() as c:
+        c.exec_driver_sql("DROP VIEW IF EXISTS transactions")
         c.exec_driver_sql(AGENT_VIEW)
+    migrate_tokens_to_keychain()
+
+
+def migrate_tokens_to_keychain() -> None:
+    from sqlmodel import select
+
+    from app.models import PlaidItem
+    from app.privacy import store_secret
+
+    with session() as s:
+        for item in s.exec(select(PlaidItem)).all():
+            if not item.access_token.startswith("keychain:"):
+                try:
+                    item.access_token = store_secret(item.id, item.access_token)
+                    s.add(item)
+                except Exception:
+                    pass  # no keychain available (e.g. headless Linux): leave as-is
+        s.commit()
 
 
 @contextmanager

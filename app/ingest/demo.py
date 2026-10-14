@@ -93,6 +93,8 @@ def generate(seed: int = 7) -> list[DemoTxn]:
         DemoTxn(date(2026, 8, 3), 89.99, "BESTBUY 00001234", "Shopping", "credit"),                    # duplicate charge
         DemoTxn(date(2026, 8, 3), 89.99, "BESTBUY 00001234 ", "Shopping", "credit"),
         DemoTxn(date(2025, 12, 20), 310.00, "VENMO PAYMENT 1029384", "Transfers"),
+        DemoTxn(date(2026, 3, 8), 60.00, "ZELLE PAYMENT TO JORDAN LEE 8829", "Transfers"),          # names to redact
+        DemoTxn(date(2026, 7, 2), 45.00, "VENMO *Priya Shah", "Transfers"),
         DemoTxn(date(2026, 5, 2), 39.00, "LATE FEE", "Fees & Interest", "credit"),
     ]
     out.sort(key=lambda t: (t.date, t.raw_name))

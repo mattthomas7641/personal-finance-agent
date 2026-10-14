@@ -23,7 +23,7 @@ class Account(SQLModel, table=True):
 class PlaidItem(SQLModel, table=True):
     """A connected bank login. access_token never leaves the server or reaches the LLM."""
     id: str = Field(primary_key=True)
-    access_token: str
+    access_token: str  # "keychain:<item_id>": the real token lives in the macOS Keychain
     institution: str = ""
     cursor: str = ""
     env: str = "sandbox"
@@ -51,6 +51,15 @@ class Rule(SQLModel, table=True):
     pattern: str = Field(index=True, unique=True)
     category: str
     merchant: str = ""
+    created_at: datetime = Field(default_factory=now)
+
+
+class Outbound(SQLModel, table=True):
+    """Local log of every piece of text sent to the Claude API (after redaction)."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    kind: str  # categorize | question | tool_result
+    text: str
+    chars: int = 0
     created_at: datetime = Field(default_factory=now)
 
 
