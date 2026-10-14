@@ -129,11 +129,13 @@ async def eval_categorize() -> dict:
 
     txns = generate()
     keys: dict[str, str] = {}
+    amounts: dict[str, float] = {}
     for t in txns:
         keys.setdefault(normalize(t.raw_name), t.truth)
+        amounts.setdefault(normalize(t.raw_name), t.amount)
     llm_keys = [k for k in keys if not builtin_category(k)]
     t0 = time.time()
-    labels, cost = await llm_label([k for k in llm_keys])
+    labels, cost = await llm_label([(k, amounts[k]) for k in llm_keys])
     wrong = []
     for k in llm_keys:
         got = labels.get(k).category if labels.get(k) else None

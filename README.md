@@ -47,8 +47,8 @@ python -m evals.run qa           # 20 questions, ~$1-2
 | Suite | Result |
 |---|---|
 | Number checker | **7/7** planted hallucinated numbers caught, **0/5** false positives |
-| Categorization | run `python -m evals.run categorize` |
-| Q&A (20 questions) | run `python -m evals.run qa` — accuracy, verified rate, steps and cost per question |
+| Categorization (Claude Sonnet 5) | **96%** of 744 transactions (95% of 40 unique descriptors the LLM had to label) for **$0.015** total |
+| Q&A agent (Claude Opus 5.5, 20 questions) | **20/20 correct**, **20/20 verified** by the number checker, 4.4 steps and **$0.033** per question |
 
 Plus 100 tests (`pytest`) covering: SQL-sandbox escapes, calculator injection, number-checker edge cases, the privacy layer (no names, phone numbers or account digits reach the model; local-only mode never calls it; tokens live only in the Keychain), network/passcode/CSRF rules, 401(k) limit, paycheck and match maths, budget-plan invariants, CSV formats, insights on planted facts, the agent loop (hallucinated number → rejected → fixed) against a scripted model, and an offline end-to-end test in real Chromium.
 
