@@ -24,6 +24,7 @@ from app.ingest import sources
 from app.models import Account, AgentRun, AgentStep, Budget, CashAccount, Goal, Outbound, PlaidItem, Plan401k, RetirementAccount, RetirementPlan, Rule, Txn
 from app import retirement
 from app import cash
+from app import fire
 from app import planning
 import datetime as dt
 from app import privacy, security
@@ -566,6 +567,41 @@ async def budgets_save(request: Request):
                 s.merge(Budget(category=cat, monthly_limit=_num(v), source="manual"))
         s.commit()
     return back("/goals?saved=budgets#budgets")
+
+
+# ---------------- plan (FIRE) ----------------
+
+@app.get("/plan", response_class=HTMLResponse)
+def plan_page(request: Request, saved: str = ""):
+    with session() as s:
+        rp = s.get(RetirementPlan, 1) or RetirementPlan()
+        k = s.get(Plan401k, 1)
+    return render(request, "plan.html", p=fire.plan(), rp=rp, birth=rp.birth_year or (k.birth_year if k else None), saved=saved)
+
+
+@app.post("/plan/settings")
+def plan_settings(birth_year: str = Form(""), retirement_age: str = Form("40"), fire_target_low: str = Form(""),
+                  fire_target_high: str = Form(""), expected_return_pct: str = Form("5"), harsh: str = Form("")):
+    with session() as s:
+        rp = s.get(RetirementPlan, 1) or RetirementPlan(id=1)
+        if birth_year.strip():
+            rp.birth_year = int(_num(birth_year))
+        rp.retirement_age = int(_num(retirement_age, 40))
+        rp.fire_target_low = _num(fire_target_low) if fire_target_low.strip() else None
+        rp.fire_target_high = _num(fire_target_high) if fire_target_high.strip() else None
+        rp.expected_return_pct = _num(expected_return_pct, 5)
+        rp.harsh = bool(harsh)
+        s.add(rp)
+        s.commit()
+    return back("/plan?saved=1")
+
+
+@app.post("/plan/apply_cuts")
+def plan_apply_cuts():
+    p = fire.plan()
+    if p and p.get("harsh_cuts"):
+        planning.apply_budgets([(c["category"], c["target"]) for c in p["harsh_cuts"]])
+    return back("/plan?saved=1")
 
 
 # ---------------- retirement ----------------

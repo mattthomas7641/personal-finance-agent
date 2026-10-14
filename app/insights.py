@@ -53,6 +53,7 @@ def recurring(txns: list[Txn] | None = None) -> list[dict]:
             "previous_amount": round(prev, 2) if prev is not None else None,
             "price_changed_on": changed_on.isoformat() if changed_on else None,
             "annual_cost": round(cur * 12, 2), "charges": len(ts), "last_charged": ts[-1].date.isoformat(),
+            "first_charged": ts[0].date.isoformat(),
             "active": (latest - ts[-1].date).days <= 40,
         })
     return sorted(out, key=lambda r: -r["annual_cost"])

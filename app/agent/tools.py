@@ -96,6 +96,12 @@ Text fields are privacy-redacted: [person], [phone], [acct], [email] and # repla
 The latest month may be partial."""
 
 
+def get_plan() -> str:
+    from app.fire import plan
+
+    return json.dumps(redact_obj(plan() or {}), default=str)
+
+
 def get_goals() -> str:
     from app.planning import overview
 

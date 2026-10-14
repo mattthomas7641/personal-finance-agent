@@ -18,6 +18,8 @@ class Account(SQLModel, table=True):
     mask: str = ""
     source: str = "csv"  # plaid | csv | demo
     item_id: Optional[str] = None
+    balance_current: Optional[float] = None  # from Plaid; for credit/loan accounts this is what you owe
+    balance_updated: Optional[datetime] = None
 
 
 class PlaidItem(SQLModel, table=True):
@@ -97,6 +99,9 @@ class RetirementPlan(SQLModel, table=True):
     roth_contributed: float = 0  # this tax year, if not auto-detected
     roth_detect_pattern: str = ""  # e.g. "FIDELITY" or "VANGUARD ROTH": sum matching transfers this year instead
     include_gap_in_plan: bool = False  # add the retirement shortfall to the budget plan
+    fire_target_low: Optional[float] = None  # "I want $1.5M-$2.0M invested by retirement_age"
+    fire_target_high: Optional[float] = None
+    harsh: bool = True  # blunt spending feedback on the Plan page
     updated_at: datetime = Field(default_factory=now)
 
 

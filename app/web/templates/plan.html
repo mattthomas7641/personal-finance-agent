@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Plan · Northstar{% endblock %}
+{% block head %}
+<style>
+  .stmt { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+  @media (min-width: 640px) { .stmt { font-size: .875rem; } }
+  .stmt th, .stmt td { padding: .5rem 0; vertical-align: baseline; }
+  .stmt td + td, .stmt th + th { padding-left: 1rem; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .stmt thead th { font-weight: 500; color: #71717a; border-bottom: 1px solid #18181b; padding-bottom: .4rem; }
+  .stmt tbody tr { border-bottom: 1px solid #f4f4f5; }
+  .stmt tr.key td { font-weight: 600; color: #18181b; }
+  .stmt tr.sub td { color: #71717a; }
+  .stmt tr.total td { border-top: 3px double #18181b; font-weight: 600; padding-top: .6rem; }
+  .stmt tr.gap td { padding-top: 1.1rem; }
+  .v-Realistic { color: #047857; } .v-Aggressive { color: #b45309; } .v-Extreme, .v-Not { color: #b91c1c; }
+  .meter { height: 6px; background: #f4f4f5; border-radius: 3px; overflow: hidden; }
+  .meter > span { display: block; height: 100%; background: #18181b; }
+  ::selection { background: #18181b; color: #fff; }
+  details > summary { list-style: none; } details > summary::-webkit-details-marker { display: none; }
+</style>
+{% endblock %}
+{% block content %}
+{% if not p or p.needs %}
+  <div class="card p-5 max-w-xl">
+    <h1 class="text-xl font-semibold">Plan</h1>
+    <p class="text-sm text-zinc-600 mt-1">Add your birth year and the amount you want invested by the time you retire. Northstar works out the monthly numbers from there.</p>
+    {% include "_plan_settings.html" %}
+  </div>
+{% else %}
+{% set t0 = p.targets[0] %}
+{% set tl = p.targets[-1] %}
+{% set two = p.targets|length > 1 %}
+
+<header class="mb-6 max-w-3xl">
+  <h1 class="text-xl font-semibold">Retiring at {{ p.target_age }}</h1>
+  <p class="text-2xl sm:text-[1.75rem] leading-snug tracking-tight mt-3 text-zinc-900" style="text-wrap: balance">
+    At your current pace you'll have <span class="num font-semibold">{{ t0.projected_current_pace|money0 }}</span> invested at {{ p.target_age }}.
+    You're aiming for <span class="num font-semibold">{{ t0.target|money0 }}{% if two %}–{{ tl.target|money0 }}{% endif %}</span>.
+  </p>
+  <p class="mt-3 text-sm text-zinc-600">
+    <b class="v-{{ t0.rating.split()[0] }}">{{ t0.rating }}.</b> {{ t0.why }}
+    You're {{ p.age|round(1) }}, so that's {{ p.months }} months away.
+  </p>
+</header>
+
+<div class="grid lg:grid-cols-5 gap-4 mb-4">
+  <!-- The gap, as a statement -->
+  <section class="card p-4 sm:p-5 lg:col-span-3 min-w-0">
+    <h2 class="font-semibold">What it takes</h2>
+    <p class="text-xs text-zinc-500 mt-0.5">Per month unless noted. Uses your last 3 months of income and spending.</p>
+    <table class="stmt mt-3">
+      <thead><tr><th class="text-left"></th>{% for t in p.targets %}<th>{{ t.target|money0 }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        <tr><td>Needs invested each month</td>{% for t in p.targets %}<td>{{ t.required_monthly|money0 }}</td>{% endfor %}</tr>
+        <tr class="sub"><td>You invest now (401(k), match, Roth, other)</td>{% for t in p.targets %}<td>−{{ t.investing_now|money0 }}</td>{% endfor %}</tr>
+        <tr class="key"><td>Invest more</td>{% for t in p.targets %}<td>{{ t.extra_monthly|money0 }}</td>{% endfor %}</tr>
+        <tr class="sub"><td>Covered by your leftover cash ({{ p.surplus|money0 }})</td>{% for t in p.targets %}<td>−{{ t.from_surplus|money0 }}</td>{% endfor %}</tr>
+        <tr class="key"><td>Cut spending by</td>{% for t in p.targets %}<td class="{{ 'text-red-700' if not t.feasible }}">{{ t.spending_cut|money0 }}</td>{% endfor %}</tr>
+        <tr class="sub"><td>Share of your {{ p.spending|money0 }} spending</td>{% for t in p.targets %}<td>{{ t.spending_cut_pct }}%</td>{% endfor %}</tr>
+        <tr class="sub"><td>Most you can realistically cut</td>{% for t in p.targets %}<td>{{ p.max_realistic_cut|money0 }}</td>{% endfor %}</tr>
+        <tr class="key"><td>Savings rate needed</td>{% for t in p.targets %}<td>{{ t.savings_rate_needed if t.savings_rate_needed < 100 else ">100" }}%</td>{% endfor %}</tr>
+        <tr><td>Verdict</td>{% for t in p.targets %}<td class="font-medium v-{{ t.rating.split()[0] }}" style="white-space: normal">{{ t.rating }}</td>{% endfor %}</tr>
+        <tr class="gap"><td colspan="{{ p.targets|length + 1 }}" class="!text-left !p-0 !pt-4 text-xs font-medium text-zinc-500">If you went all in at {{ p.feasible_monthly|money0 }}/mo</td></tr>
+        <tr><td>You'd reach the goal at</td>{% for t in p.targets %}<td>{{ ("age " ~ t.alternatives.retire_at_age) if t.alternatives.retire_at_age else "after 70" }}</td>{% endfor %}</tr>
+        <tr><td>You'd have at {{ p.target_age }}</td>{% for t in p.targets %}<td>{{ t.alternatives.reachable_by_target_age|money0 }}</td>{% endfor %}</tr>
+        <tr><td>Extra pay a year to make it on time</td>{% for t in p.targets %}<td>{{ (t.alternatives.extra_income_yearly_pretax|money0) if t.alternatives.extra_income_yearly_pretax else "none" }}</td>{% endfor %}</tr>
+        <tr><td>Return needed to make it on time</td>{% for t in p.targets %}<td>{{ (t.alternatives.return_needed_pct ~ "%") if t.alternatives.return_needed_pct is not none else "—" }}</td>{% endfor %}</tr>
+      </tbody>
+    </table>
+    <p class="text-xs text-zinc-500 mt-3">Savings rate is the share of your pay that has to be invested. Under 35% is normal for early retirement; over 50% is hard to keep up.</p>
+  </section>
+
+  <!-- Recommendations -->
+  <section class="card p-4 sm:p-5 lg:col-span-2 min-w-0">
+    <h2 class="font-semibold">What to change</h2>
+    <p class="text-xs text-zinc-500 mt-0.5">Updated every time your numbers change.</p>
+    <ol class="mt-3 space-y-3 text-sm leading-relaxed">
+      {% for r in p.recommendations %}
+        <li class="flex gap-3"><span class="num text-zinc-400 w-4 shrink-0 text-right">{{ loop.index }}.</span><span>{{ r }}</span></li>
+      {% endfor %}
+    </ol>
+  </section>
+</div>
+
+<!-- Trajectory -->
+<section class="card p-4 sm:p-5 mb-4">
+  <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+    <h2 class="font-semibold">Invested balance by age</h2>
+    <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-600">
+      <span class="flex items-center gap-1.5"><svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke="#18181b" stroke-width="2"/></svg>Needed for {{ t0.target|money0 }}</span>
+      <span class="flex items-center gap-1.5"><svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke="#047857" stroke-width="2"/></svg>All in</span>
+      <span class="flex items-center gap-1.5"><svg width="18" height="6"><line x1="0" y1="3" x2="18" y2="3" stroke="#b45309" stroke-width="2" stroke-dasharray="4 3"/></svg>Current pace</span>
+    </div>
+  </div>
+  <div class="relative mt-3 h-56 sm:h-72"><canvas id="path"></canvas></div>
+  <p class="text-xs text-zinc-500 mt-2">Assumes {{ p.return_pct }}% a year after inflation, every year. Real markets won't be that smooth.</p>
+</section>
+
+<div class="grid lg:grid-cols-2 gap-4 mb-4">
+  <!-- Balance sheet -->
+  <section class="card p-4 sm:p-5">
+    <h2 class="font-semibold">What you have</h2>
+    {% set ms = t0.milestones[0] if t0.milestones else none %}
+    <table class="stmt mt-3">
+      <thead><tr><th class="text-left"></th><th>Have</th><th>Should have</th></tr></thead>
+      <tbody>
+        <tr><td>Investments{% if ms %}<div class="text-xs text-zinc-500">by age {{ ms.age }}, to stay on track</div>{% endif %}</td>
+          <td>{{ p.net_worth.invested|money0 }}</td><td>{{ ms.need|money0 if ms else "—" }}</td></tr>
+        <tr><td>Cash &amp; savings<div class="text-xs text-zinc-500">6 months of spending</div></td>
+          <td>{{ p.net_worth.liquid|money0 }}</td><td>{{ p.emergency_fund_target|money0 }}</td></tr>
+        <tr><td>Investments at {{ p.target_age }}</td><td>{{ t0.projected_current_pace|money0 }}</td><td>{{ t0.target|money0 }}</td></tr>
+      </tbody>
+    </table>
+    <div class="mt-3">
+      <div class="flex justify-between text-xs text-zinc-500"><span>Toward {{ t0.target|money0 }}</span><span class="num">{{ (p.net_worth.invested / t0.target * 100)|round(1) if t0.target else 0 }}%</span></div>
+      <div class="meter mt-1"><span style="width: {{ [p.net_worth.invested / t0.target * 100 if t0.target else 0, 100]|min }}%"></span></div>
+    </div>
+    {% if p.net_worth.liquid > p.emergency_fund_target * 1.5 %}<p class="text-xs text-zinc-600 mt-3">You hold {{ (p.net_worth.liquid - p.emergency_fund_target)|money0 }} more cash than a 6-month emergency fund.</p>{% endif %}
+
+    <table class="stmt mt-5">
+      <thead><tr><th class="text-left">Accounts</th><th>Balance</th></tr></thead>
+      <tbody>
+        {% for a in p.net_worth.assets %}<tr><td>{{ a.name }} <span class="text-xs text-zinc-400">{{ a.group }}</span></td><td>{{ a.balance|money0 }}</td></tr>{% endfor %}
+        {% for d in p.net_worth.debts %}<tr><td>{{ d.name }} <span class="text-xs text-zinc-400">owed</span></td><td class="text-red-700">−{{ d.balance|money0 }}</td></tr>{% endfor %}
+        <tr class="total"><td>Net worth</td><td>{{ p.net_worth.net_worth|money0 }}</td></tr>
+      </tbody>
+    </table>
+    <p class="text-xs text-zinc-500 mt-2">Bank balances come from Plaid. <a class="underline underline-offset-2" href="/connect#manual">Update cash</a> · <a class="underline underline-offset-2" href="/retirement">Update investments</a></p>
+  </section>
+
+  <!-- Subscriptions -->
+  <section class="card p-4 sm:p-5">
+    <div class="flex items-baseline justify-between gap-3">
+      <h2 class="font-semibold">Subscriptions</h2>
+      <span class="num text-sm text-zinc-600">{{ p.subscriptions.monthly|money0 }}/mo · <b class="text-zinc-900">{{ p.subscriptions.annual|money0 }}/yr</b></span>
+    </div>
+    {% for n in p.subscriptions.notes %}<p class="text-sm text-amber-800 bg-amber-50 rounded-md px-3 py-2 mt-3">{{ n }}</p>{% endfor %}
+    <table class="stmt mt-3">
+      <thead><tr><th class="text-left"></th><th>Month</th><th>Year</th></tr></thead>
+      <tbody>
+        {% for s in p.subscriptions["items"] %}
+          <tr><td>{{ s.merchant }}
+            {% for f in s.flags if f != "streaming" %}<span class="ml-1 text-xs font-medium text-amber-700">{{ f }}</span>{% endfor %}</td>
+            <td>{{ s.amount|money }}</td><td>{{ s.annual_cost|money0 }}</td></tr>
+        {% else %}<tr><td colspan="3" class="!text-left text-zinc-500">No recurring charges found yet. This needs about 3 months of history.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<!-- Cuts -->
+<section class="card p-4 sm:p-5 mb-4">
+  <h2 class="font-semibold">{{ "Where your money goes, bluntly" if p.harsh else "Where to cut" }}</h2>
+  <p class="text-sm text-zinc-600 mt-1 max-w-3xl">Average of the last 3 months, biggest savings first.{% if t0.spending_cut > p.max_realistic_cut %} Even all of these together don't close the gap; see "What to change".{% endif %}</p>
+  <table class="stmt mt-3">
+    <thead><tr><th class="text-left"></th><th>Now</th><th>Limit</th><th class="hidden sm:table-cell">Saves / yr</th></tr></thead>
+    <tbody>
+      {% for c in p.harsh_cuts %}
+        <tr><td><span class="font-medium">{{ c.category }}</span>{% if p.harsh %}<div class="text-xs text-zinc-500 mt-0.5 max-w-xl" style="white-space: normal">{{ c.message }}</div>{% endif %}</td>
+          <td class="text-zinc-500">{{ c.avg_month|money0 }}</td><td class="font-semibold">{{ c.target|money0 }}</td><td class="hidden sm:table-cell">{{ (c.cut * 12)|money0 }}</td></tr>
+      {% else %}<tr><td colspan="4" class="!text-left text-zinc-500">Not enough spending history yet.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% if p.harsh_cuts %}<form method="post" action="/plan/apply_cuts" class="mt-4 flex flex-wrap items-center gap-3">
+    <button class="btn btn-primary">Use these as my budgets</button>
+    <span class="text-xs text-zinc-500">Sets monthly budgets for these categories. You can change them later on Overview.</span></form>{% endif %}
+</section>
+
+<section class="card p-4 sm:p-5">
+  <details {% if saved %}open{% endif %}>
+    <summary class="font-semibold cursor-pointer flex items-center justify-between">Targets and assumptions
+      <span class="text-sm font-normal text-zinc-500">{{ p.return_pct }}% return · retire at {{ p.target_age }}</span></summary>
+    {% include "_plan_settings.html" %}
+  </details>
+  <p class="text-xs text-zinc-500 mt-3">These numbers are arithmetic on your own data and assumptions. They aren't investment, tax or legal advice, and Northstar never suggests what to buy.</p>
+</section>
+
+<script>
+(() => {
+  const t = {{ t0|tojson }};
+  const money = v => "$" + (v >= 1e6 ? (v / 1e6).toFixed(1) + "M" : Math.round(v / 1e3) + "k");
+  new Chart(document.getElementById("path"), {type: "line",
+    data: {labels: t.milestones.map(m => m.age), datasets: [
+      {label: "Needed", data: t.milestones.map(m => m.need), borderColor: "#18181b", borderWidth: 2, pointRadius: 0, tension: .25},
+      {label: "All in", data: t.milestones.map(m => m.all_in), borderColor: "#047857", borderWidth: 2, pointRadius: 0, tension: .25},
+      {label: "Current pace", data: t.milestones.map(m => m.current_pace), borderColor: "#b45309", borderWidth: 2, borderDash: [5, 4], pointRadius: 0, tension: .25}]},
+    options: {maintainAspectRatio: false, interaction: {mode: "index", intersect: false},
+      plugins: {legend: {display: false}, tooltip: {callbacks: {title: i => "Age " + i[0].label, label: i => i.dataset.label + ": " + money(i.raw)}}},
+      scales: {x: {grid: {display: false}, ticks: {color: "#71717a"}},
+               y: {border: {display: false}, grid: {color: "#f4f4f5"}, ticks: {color: "#71717a", callback: money, maxTicksLimit: 6}}}}});
+})();
+</script>
+{% endif %}
+{% endblock %}
