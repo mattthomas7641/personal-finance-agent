@@ -25,7 +25,9 @@ LLMs are bad at arithmetic and happy to make up figures. This agent can't: it an
 | **Safe calculator** | AST-based arithmetic only; no names, imports or attribute access. |
 | **No double counting** | Built-in rules treat credit-card payments, transfers and investment moves as transfers, so paying your card isn't counted as spending twice. |
 | **Corrections stick** | Fix a category once and a rule re-labels every matching transaction and applies before the AI ever sees it again. |
-| **Local & private** | Data lives in `data/ledger.db` on your machine. Bank logins happen in Plaid's window; access tokens never reach the model. The model sees merchant descriptors (for categorization) and query results (for answers). |
+| **Privacy layer** | Everything sent to the API is scrubbed first: names in Zelle/Venmo/Cash App lines, emails, phone numbers, card/account digits, and any terms you list (your name, street…). Descriptors go out as numbered lines and map back locally. Amounts and dates are untouched. A **Privacy page** shows a before/after preview and a log of every character sent. |
+| **Local-only mode** | Categorize with your rules, built-ins and Plaid's categories only; nothing leaves the machine unless you ask a question. |
+| **Secrets** | Plaid access tokens live in the macOS Keychain, not the database; the agent's SQL can't see them or internal IDs. Data lives in `data/ledger.db` on your machine. |
 | **Boundaries** | Read-only. No money movement, no investment/tax advice. |
 
 ## Cost-aware design
@@ -48,7 +50,7 @@ python -m evals.run qa           # 20 questions, ~$1-2
 | Categorization | run `python -m evals.run categorize` |
 | Q&A (20 questions) | run `python -m evals.run qa` — accuracy, verified rate, steps and cost per question |
 
-Plus 35 tests (`pytest`): SQL sandbox escapes, calculator injection, checker edge cases, CSV formats, categorization cascade, insights on planted facts, and the agent loop (including hallucination → rejection → fix) against a scripted model.
+Plus 53 tests (`pytest`), including privacy tests (no names/phones/digits reach the model, local-only never calls the LLM, tokens only in the keychain),: SQL sandbox escapes, calculator injection, checker edge cases, CSV formats, categorization cascade, insights on planted facts, and the agent loop (including hallucination → rejection → fix) against a scripted model.
 
 ## Run it
 

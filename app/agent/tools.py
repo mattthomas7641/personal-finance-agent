@@ -10,6 +10,7 @@ import sqlite3
 from app import insights
 from app.config import CATEGORIES, NON_SPEND
 from app.db import readonly_conn
+from app.privacy import redact, redact_obj
 
 MAX_ROWS = 200
 
@@ -31,7 +32,9 @@ def run_sql(query: str) -> str:
         conn.close()
     truncated = len(rows) > MAX_ROWS
     rows = rows[:MAX_ROWS]
-    fmt = lambda v: f"{v:.2f}" if isinstance(v, float) else ("" if v is None else str(v))
+    # Numbers pass through untouched; text cells (descriptions, merchants) are redacted before
+    # they can reach the model.
+    fmt = lambda v: f"{v:.2f}" if isinstance(v, float) else ("" if v is None else (str(v) if isinstance(v, int) else redact(str(v))))
     lines = [" | ".join(cols)] + [" | ".join(fmt(v) for v in r) for r in rows]
     if truncated:
         lines.append(f"... truncated to {MAX_ROWS} rows; aggregate in SQL instead.")
@@ -42,7 +45,7 @@ def query_rows(query: str) -> tuple[list[str], list[tuple]]:
     conn = readonly_conn()
     try:
         cur = conn.execute(query.strip().rstrip(";"))
-        return [d[0] for d in cur.description], cur.fetchmany(MAX_ROWS)
+        return [d[0] for d in cur.description], [tuple(redact(v) if isinstance(v, str) else v for v in r) for r in cur.fetchmany(MAX_ROWS)]
     finally:
         conn.close()
 
@@ -88,9 +91,13 @@ def schema() -> str:
   category TEXT, pending INTEGER, account TEXT, account_type TEXT
 Sign convention: amount > 0 = money out (spending), amount < 0 = money in (income, refunds).
 Categories: {", ".join(CATEGORIES)}. Exclude {sorted(NON_SPEND)} when computing "spending".
-Data covers {lo} to {hi} ({n} transactions). Accounts: {", ".join(a for a in accts if a)}.
+Data covers {lo} to {hi} ({n} transactions). Accounts: {", ".join(redact(a) for a in accts if a)}.
+Text fields are privacy-redacted: [person], [phone], [acct], [email] and # replace personal details.
 The latest month may be partial."""
 
 
 def get_insights() -> str:
-    return json.dumps(insights.all_insights(), default=str)
+    ins = insights.all_insights()
+    for d in ins["duplicates"]:
+        d.pop("ids", None)
+    return json.dumps(redact_obj(ins), default=str)

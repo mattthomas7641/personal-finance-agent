@@ -13,6 +13,7 @@ from sqlmodel import select
 from app.categorize import from_plaid, normalize, display_name
 from app.db import session
 from app.models import Account, PlaidItem, Txn
+from app.privacy import load_secret, store_secret
 
 # ---------------- Plaid ----------------
 
@@ -53,7 +54,8 @@ def exchange_public_token(public_token: str, institution: str = "") -> str:
 
     res = plaid_client().item_public_token_exchange(ItemPublicTokenExchangeRequest(public_token=public_token))
     with session() as s:
-        s.merge(PlaidItem(id=res["item_id"], access_token=res["access_token"], institution=institution, env=plaid_env()))
+        s.merge(PlaidItem(id=res["item_id"], access_token=store_secret(res["item_id"], res["access_token"]),
+                          institution=institution, env=plaid_env()))
         s.commit()
     return res["item_id"]
 
@@ -86,14 +88,14 @@ def sync_plaid() -> dict:
         items = s.exec(select(PlaidItem)).all()
     for item in items:
         stats["items"] += 1
-        for a in client.accounts_get(AccountsGetRequest(access_token=item.access_token))["accounts"]:
+        for a in client.accounts_get(AccountsGetRequest(access_token=load_secret(item.access_token)))["accounts"]:
             with session() as s:
                 s.merge(Account(id=a["account_id"], name=a["name"], type=str(a["type"]), mask=a.get("mask") or "",
                                 source="plaid", item_id=item.id))
                 s.commit()
         cursor, added, modified, removed = item.cursor, [], [], []
         while True:
-            kw = {"access_token": item.access_token}
+            kw = {"access_token": load_secret(item.access_token)}
             if cursor:
                 kw["cursor"] = cursor
             res = client.transactions_sync(TransactionsSyncRequest(**kw))

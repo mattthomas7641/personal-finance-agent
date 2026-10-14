@@ -69,7 +69,7 @@ def from_plaid(pfc: dict | None) -> str | None:
 
 
 class Labeled(BaseModel):
-    key: str
+    id: int
     merchant: str
     category: Literal[tuple(CATEGORIES)]  # type: ignore[valid-type]
 
@@ -83,31 +83,43 @@ Categories: {", ".join(CATEGORIES)}.
 - "Subscriptions" = recurring digital services (streaming, apps, cloud storage). Gyms go to "Health & Fitness".
 - Payroll/direct deposit = "Income". Moves between own accounts, Venmo/Zelle to people = "Transfers".
 - Ride-hail, transit, bikeshare, taxis = "Transport". Food delivery and restaurants = "Dining".
-- Return every key exactly as given, plus a short clean merchant name (e.g. "Blue Bottle Coffee")."""
+- Return each line's id number plus a short clean merchant name (e.g. "Blue Bottle Coffee").
+- [person], [phone], [acct] and # mark personal details removed for privacy."""
 
 
-async def llm_label(keys: list[str], examples: str = "") -> tuple[dict[str, Labeled], float]:
+async def llm_label(keys: list[tuple[str, float]], examples: str = "") -> tuple[dict[str, Labeled], float]:
     from app.llm import structured
+
+    """`keys` are (descriptor, signed amount) pairs. Descriptors are redacted and sent as numbered
+    lines; results map back by number, so the original text never leaves the machine."""
+    from app.privacy import record, redact
 
     out: dict[str, Labeled] = {}
     total = 0.0
     for i in range(0, len(keys), 80):
         chunk = keys[i:i + 80]
+        lines = "\n".join(f"{n}: {redact(k)}  ({'+' if amt > 0 else '-'}{abs(amt):.0f})" for n, (k, amt) in enumerate(chunk))
+        payload = "Descriptors (amount sign: + spend, - money in):\n" + lines
+        record("categorize", payload)
         res, cost = await structured(
             role="categorize",
             instructions=INSTRUCTIONS,
-            cached_context="Examples of the user's own corrections:\n" + (examples or "(none)"),
-            user="Descriptors (amount sign: + spend, - money in):\n" + "\n".join(chunk),
-            output=Batch, effort="low", max_tokens=8000,
+            cached_context="Examples of the user's own corrections:\n" + (redact(examples) if examples else "(none)"),
+            user=payload, output=Batch, effort="low", max_tokens=8000,
         )
         total += cost
         for it in res.items:
-            out[it.key.split("  (")[0].strip()] = it
+            if 0 <= it.id < len(chunk):
+                out[chunk[it.id][0]] = it
     return out, total
 
 
-async def categorize_pending(use_llm: bool = True) -> dict:
-    """Categorize every uncategorized transaction through the cascade."""
+async def categorize_pending(use_llm: bool | None = None) -> dict:
+    """Categorize every uncategorized transaction through the cascade. In local-only privacy mode
+    the LLM step is skipped unless explicitly requested (use_llm=True)."""
+    if use_llm is None:
+        from app.privacy import local_only
+        use_llm = not local_only()
     with session() as s:
         rules = {r.pattern: r for r in s.exec(select(Rule)).all()}
         memory = {}
@@ -138,7 +150,7 @@ async def categorize_pending(use_llm: bool = True) -> dict:
 
     if need and use_llm:
         examples = "\n".join(f"{k} -> {r.category}" for k, r in list(rules.items())[:40])
-        keys = [f"{k}  ({'+' if v[0].amount > 0 else '-'}{abs(v[0].amount):.0f})" for k, v in need.items()]
+        keys = [(k, v[0].amount) for k, v in need.items()]
         labels, cost = await llm_label(keys, examples)
         stats["cost_usd"] = round(cost, 4)
         for key, txns in need.items():

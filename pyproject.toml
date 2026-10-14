@@ -3,7 +3,7 @@ name = "ledger-agent"
 version = "0.1.0"
 description = "Personal finance agent that answers questions about your money with numbers it can prove."
 requires-python = ">=3.11"
-dependencies = ["anthropic>=1.13", "plaid-python>=45", "fastapi", "uvicorn[standard]", "sqlmodel", "jinja2", "pyyaml", "python-multipart", "httpx"]
+dependencies = ["anthropic>=1.13", "plaid-python>=45", "fastapi", "uvicorn[standard]", "sqlmodel", "jinja2", "pyyaml", "python-multipart", "httpx", "keyring"]
 
 [project.optional-dependencies]
 dev = ["pytest"]

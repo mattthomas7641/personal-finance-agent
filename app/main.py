@@ -20,7 +20,10 @@ from app.categorize import categorize_pending, correct
 from app.config import CATEGORIES, NON_SPEND, load_config
 from app.db import init_db, session
 from app.ingest import sources
-from app.models import Account, AgentRun, AgentStep, PlaidItem, Rule, Txn
+from app.models import Account, AgentRun, AgentStep, Outbound, PlaidItem, Rule, Txn
+from app import privacy
+from app.config import ROOT
+import yaml
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("app")
@@ -261,9 +264,53 @@ def remove_demo():
 
 
 @app.post("/connect/categorize")
-async def recategorize():
-    asyncio.create_task(background("Categorize", lambda: "pending"))
-    return back("/connect")
+async def recategorize(ai: int = Form(0)):
+    async def run():
+        STATUS.update(busy=True, message="Categorizing…")
+        try:
+            st = await categorize_pending(use_llm=True if ai else None)
+            STATUS["message"] = f"Categorized {st['rule'] + st['memory'] + st['plaid'] + st['llm']} ({st['llm']} by AI)" + \
+                (f" · {st['left']} left for you to categorize" if st["left"] else "")
+        except Exception as e:
+            STATUS["message"] = f"Categorize failed: {e}"
+        finally:
+            STATUS["busy"] = False
+    asyncio.create_task(run())
+    return back("/privacy" if ai else "/connect")
+
+
+# ---------------- privacy ----------------
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy_page(request: Request):
+    cfg = load_config().get("privacy") or {}
+    with session() as s:
+        log = s.exec(select(Outbound).order_by(Outbound.id.desc()).limit(60)).all()
+        sent_chars = s.exec(select(func.coalesce(func.sum(Outbound.chars), 0))).one()
+        samples = s.exec(select(Txn.raw_name).where(Txn.source != "demo").distinct().limit(400)).all() or \
+            s.exec(select(Txn.raw_name).distinct().limit(400)).all()
+        uncategorized = s.exec(select(func.count()).select_from(Txn).where(Txn.category == "")).one()
+    changed = [(r, privacy.redact(r)) for r in samples if privacy.redact(r) != " ".join(r.split())][:25]
+    return render(request, "privacy.html", mode=cfg.get("mode", "standard"), terms=cfg.get("redact_terms") or [],
+                  log=log, sent_chars=sent_chars, changed=changed, uncategorized=uncategorized)
+
+
+@app.post("/privacy")
+def privacy_save(mode: str = Form(...), terms: str = Form("")):
+    path = ROOT / "config.yaml"
+    cfg = yaml.safe_load(path.read_text()) if path.exists() else load_config()
+    cfg["privacy"] = {"mode": "local_only" if mode == "local_only" else "standard",
+                      "redact_terms": [t.strip() for t in terms.splitlines() if t.strip()]}
+    path.write_text(yaml.safe_dump(cfg, sort_keys=False))
+    return back("/privacy")
+
+
+@app.post("/privacy/clear_log")
+def privacy_clear():
+    with session() as s:
+        s.exec(delete(Outbound))
+        s.commit()
+    return back("/privacy")
 
 
 # ---------------- rules ----------------
