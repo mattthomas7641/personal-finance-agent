@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
     task.cancel()
 
 
-app = FastAPI(title="ledger-agent", lifespan=lifespan)
+app = FastAPI(title="Northstar", lifespan=lifespan)
 WEB = Path(__file__).parent / "web"
 templates = Jinja2Templates(directory=str(WEB / "templates"))
 app.mount("/static", StaticFiles(directory=str(WEB / "static")), name="static")
@@ -80,7 +80,7 @@ async def access_guard(request: Request, call_next):
     kind = security.classify(host, request.headers)
     request.state.local = kind == "local"
     if kind == "denied":
-        return PlainTextResponse("Forbidden: only this Mac and your Tailscale devices can open ledger-agent.", status_code=403)
+        return PlainTextResponse("Forbidden: only this Mac and your Tailscale devices can open Northstar.", status_code=403)
     if security.bad_origin(request.method, request.headers):
         return PlainTextResponse("Forbidden: request from another site.", status_code=403)
     path = request.url.path
@@ -88,7 +88,7 @@ async def access_guard(request: Request, call_next):
         return await call_next(request)
     if not security.has_passcode():
         return HTMLResponse("<meta name=viewport content='width=device-width'><p style='font:16px system-ui;padding:24px'>"
-                            "Set a passcode first: open ledger-agent on your Mac → Privacy → Phone access.</p>", status_code=403)
+                            "Set a passcode first: open Northstar on your Mac → Privacy → Phone access.</p>", status_code=403)
     if not security.valid_session(request.cookies.get(security.COOKIE)):
         if request.method != "GET" or path.startswith("/api/") or path.endswith("/stream"):
             return PlainTextResponse("Login required", status_code=401)
@@ -368,7 +368,7 @@ def set_passcode(request: Request, passcode: str = Form(...), confirm: str = For
 @app.get("/manifest.webmanifest")
 def manifest():
     return JSONResponse({
-        "name": "ledger-agent", "short_name": "Ledger", "start_url": "/", "scope": "/", "display": "standalone",
+        "name": "Northstar", "short_name": "Northstar", "start_url": "/", "scope": "/", "display": "standalone",
         "background_color": "#fafafa", "theme_color": "#18181b",
         "icons": [{"src": "/static/icon-180.png", "sizes": "180x180", "type": "image/png"},
                   {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png"}],

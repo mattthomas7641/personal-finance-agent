@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>{% block title %}ledger-agent{% endblock %}</title>
+  <title>{% block title %}Northstar{% endblock %}</title>
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Ledger">
+  <meta name="apple-mobile-web-app-title" content="Northstar">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="theme-color" content="#ffffff">
   <script src="/static/tailwind.js"></script>
@@ -31,7 +31,7 @@
   {% set path = request.url.path if request else "/" %}
   <header class="border-b border-zinc-200 bg-white" style="padding-top:env(safe-area-inset-top)">
     <nav class="max-w-6xl mx-auto px-4 h-14 flex items-center gap-6 text-sm">
-      <a href="/" class="font-semibold tracking-tight">ledger-agent</a>
+      <a href="/" class="font-semibold tracking-tight flex items-center gap-2"><img src="/static/icon-180.png" alt="" class="w-6 h-6 rounded-md">Northstar</a>
       <a href="/" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Overview</a>
       <a href="/transactions" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Transactions</a>
       <a href="/goals" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Goals</a>

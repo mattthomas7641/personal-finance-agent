@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 from app.config import load_config
 
-SERVICE = "ledger-agent"
+SERVICE = "ledger-agent"  # Keychain service id; kept from the original name so saved tokens stay readable
 
 P2P = re.compile(r"\b(ZELLE|VENMO|CASH ?APP|APPLE CASH)\b", re.I)  # PayPal omitted: mostly merchants
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")

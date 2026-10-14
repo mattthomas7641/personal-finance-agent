@@ -43,7 +43,7 @@ def create_link_token() -> str:
     from plaid.model.products import Products
 
     req = LinkTokenCreateRequest(
-        client_name="ledger-agent", language="en", country_codes=[CountryCode("US")],
+        client_name="Northstar", language="en", country_codes=[CountryCode("US")],
         user=LinkTokenCreateRequestUser(client_user_id="local-user"), products=[Products("transactions")],
     )
     return plaid_client().link_token_create(req)["link_token"]
