@@ -348,12 +348,13 @@ def overview(today: date | None = None) -> dict:
     with session() as s:
         goals = s.exec(select(Goal).order_by(Goal.target_date)).all()
     statuses = [goal_status(g, today, k) for g in goals]
-    k401_need, extra_401k_monthly = 0.0, 0.0
+    k401_need, extra_401k_monthly, extra_401k_monthly_total = 0.0, 0.0, 0.0
     if k and not k.on_track_to_max:
         plan = _plan()
         target_pct = k.required_pct if k.realistic_this_year else k.next_year_pct_to_max
         extra_401k_monthly = max(0.0, (target_pct or 0) - k.current_pct) / 100 * plan.annual_salary / 12
         k401_need = extra_401k_monthly * (1 - plan.marginal_tax_rate_pct / 100)  # take-home drop after tax savings
+        extra_401k_monthly_total = extra_401k_monthly
     # A bigger 401(k) contribution also funds retirement goals: don't count that money twice.
     for x in statuses:
         if x["kind"] == "retirement" and extra_401k_monthly:
@@ -361,9 +362,22 @@ def overview(today: date | None = None) -> dict:
             x["monthly_gap_after_401k_change"] = round(x["monthly_gap"] - covered, 2)
             extra_401k_monthly -= covered
     need = sum(x.get("monthly_gap_after_401k_change", x["monthly_gap"]) for x in statuses) + k401_need
+
+    # Roth IRA and the retirement shortfall (Retirement page), if the user opted them into the plan.
+    from app import retirement as R
+    rplan = R._plan()
+    roth = R.roth_status(today, rplan)
+    roth_need = roth.monthly_to_max_by_dec if (rplan.roth_target and not roth.maxed and roth.allowed > 0) else 0.0
+    ret = R.retirement_status(today, rplan)
+    ret_need = 0.0
+    if ret and rplan.include_gap_in_plan and not ret.on_track:
+        ret_need = max(0.0, ret.monthly_gap - extra_401k_monthly_total)  # a planned 401(k) raise already closes part of it
+    need += roth_need + ret_need
     return {"today": today.isoformat(), "k401": asdict(k) if k else None, "goals": statuses,
             "cash_flow": cash_flow(today), "where_to_cut": where_to_cut(today)[:6],
             "monthly_needed_for_goals": round(need, 2), "monthly_needed_for_401k": round(k401_need, 2),
+            "monthly_needed_for_roth": round(roth_need, 2), "monthly_needed_for_retirement": round(ret_need, 2),
+            "roth": asdict(roth), "retirement": asdict(ret) if ret else None,
             "plan": cut_plan(need, today) if need > 0 else None, "budgets": budgets(), "disclaimer": DISCLAIMER}
 
 

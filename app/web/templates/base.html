@@ -30,11 +30,12 @@
 <body class="bg-zinc-50 text-zinc-900">
   {% set path = request.url.path if request else "/" %}
   <header class="border-b border-zinc-200 bg-white" style="padding-top:env(safe-area-inset-top)">
-    <nav class="max-w-6xl mx-auto px-4 h-14 flex items-center gap-6 text-sm">
-      <a href="/" class="font-semibold tracking-tight flex items-center gap-2"><img src="/static/icon-180.png" alt="" class="w-6 h-6 rounded-md">Northstar</a>
+    <nav class="max-w-6xl mx-auto px-4 h-14 flex items-center gap-4 lg:gap-6 text-sm whitespace-nowrap overflow-x-auto">
+      <a href="/" class="font-semibold tracking-tight flex items-center gap-2 mr-2"><img src="/static/icon-180.png" alt="" class="w-6 h-6 rounded-md">Northstar</a>
       <a href="/" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Overview</a>
       <a href="/transactions" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Transactions</a>
       <a href="/goals" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Goals</a>
+      <a href="/retirement" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Retirement</a>
       <a href="/runs" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Questions</a>
       <a href="/rules" class="hidden sm:inline text-zinc-600 hover:text-zinc-900">Rules</a>
       <a href="/privacy" class="hidden sm:inline text-zinc-600 hover:text-zinc-900 ml-auto">Privacy</a>

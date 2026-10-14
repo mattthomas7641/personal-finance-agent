@@ -134,7 +134,8 @@ def test_overview_does_not_double_count_401k_and_retirement():
     [r] = [g for g in ov["goals"] if g["kind"] == "retirement"]
     extra = (ov["k401"]["next_year_pct_to_max"] - 6) / 100 * 90000 / 12
     assert r["monthly_gap_after_401k_change"] == pytest.approx(max(0, r["monthly_gap"] - extra), abs=0.01)
-    assert ov["monthly_needed_for_goals"] == pytest.approx(r["monthly_gap_after_401k_change"] + ov["monthly_needed_for_401k"], abs=0.02)
+    assert ov["monthly_needed_for_goals"] == pytest.approx(
+        r["monthly_gap_after_401k_change"] + ov["monthly_needed_for_401k"] + ov["monthly_needed_for_roth"], abs=0.02)
     with session() as s:
         for g in s.exec(__import__("sqlmodel").select(Goal)).all():
             s.delete(g)

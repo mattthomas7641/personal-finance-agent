@@ -34,7 +34,9 @@ How to work:
 - get_insights returns detected subscriptions, price increases, duplicate charges and unusual charges.
 - get_goals returns the user's 401(k) status (IRS limit, year-to-date, projected year-end, % needed to max out this
   year and next, employer match), savings/retirement goals with required monthly amounts, 3-month cash flow,
-  where spending has room to trim, and a budget plan that frees up what the goals need. Use it for any question
+  where spending has room to trim, a budget plan that frees up what the goals need, the Roth IRA tracker
+  (limit after income phase-out, contributed, monthly needed) and retirement (FI number, Coast FIRE number,
+  projection, age you reach each). Use it for any question
   about goals, retirement, 401(k), budgets or cutting back. Explain its numbers; don't recompute them differently.
 - Finish by calling final_answer. Every number in it must come from a tool result in this conversation;
   a checker rejects answers with unsupported numbers.
@@ -59,7 +61,7 @@ TOOL_SPECS = [
                                       "required": ["expression"], "additionalProperties": False}},
     {"name": "get_insights", "description": "Detected subscriptions (with price changes), duplicate charges and unusual charges.",
      "strict": True, "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False}},
-    {"name": "get_goals", "description": "401(k) max-out status, savings/retirement goals, cash flow, where to cut, and a budget plan.",
+    {"name": "get_goals", "description": "401(k) and Roth IRA status, retirement/FI and Coast FIRE projections, savings goals, cash flow, where to cut, and a budget plan.",
      "strict": True, "input_schema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False}},
     {"name": "make_chart", "description": "Chart a 2-column query result (label, value). kind: bar or line.",
      "strict": True, "input_schema": {"type": "object", "properties": {
