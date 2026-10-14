@@ -3,7 +3,7 @@
 <h1 class="text-xl font-semibold mb-1">Privacy</h1>
 {% if error %}<div class="mb-3 text-sm text-red-800 bg-red-50 rounded-lg p-3">{{ error }}</div>{% endif %}
 {% if saved == "passcode" %}<div class="mb-3 text-sm text-emerald-800 bg-emerald-50 rounded-lg p-3">Passcode saved. Any phone that was signed in needs to sign in again.</div>{% endif %}
-<p class="text-sm text-zinc-600 mb-4">Your data is stored only on this computer. Below is exactly what may be sent to the Claude API, and a log of everything that has been.</p>
+<p class="text-sm text-zinc-600 mb-4">Your data is stored only on this computer. Below is exactly what may be sent to the Claude API, and a log of everything that has been. Full <a class="underline" href="https://mattthomas7641.github.io/northstar/privacy.html" target="_blank" rel="noopener">privacy policy</a> and <a class="underline" href="https://github.com/mattthomas7641/personal-finance-agent/blob/main/SECURITY.md" target="_blank" rel="noopener">security policy</a>.</p>
 
 <div class="grid md:grid-cols-2 gap-4">
   <form method="post" action="/privacy" class="card p-5 space-y-3">
