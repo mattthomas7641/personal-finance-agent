@@ -317,3 +317,17 @@ def test_malformed_fidelity_file_gives_a_message_not_a_crash(payload):
     with TestClient(main.app, client=MAC, follow_redirects=False) as c:
         r = c.post("/retirement/import-fidelity", files={"file": ("Portfolio_Positions.csv", payload, "text/csv")})
     assert r.status_code == 303 and "error=" in r.headers["location"]
+
+
+def test_saving_retirement_assumptions_keeps_the_plan_target():
+    from app.models import RetirementPlan
+    with session() as s:
+        s.merge(RetirementPlan(id=1, birth_year=1996, retirement_age=40, fire_target_low=1_500_000, fire_target_high=2_000_000, harsh=True))
+        s.commit()
+    with TestClient(main.app, client=MAC, follow_redirects=False) as c:
+        c.post("/retirement/plan", data={"birth_year": "1996", "retirement_age": "40", "expected_return_pct": "5"})
+    with session() as s:
+        rp = s.get(RetirementPlan, 1)
+        assert (rp.fire_target_low, rp.fire_target_high, rp.harsh, rp.retirement_age) == (1_500_000, 2_000_000, True, 40)
+        s.delete(rp)
+        s.commit()
