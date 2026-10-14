@@ -129,6 +129,53 @@ def sync_plaid() -> dict:
     return stats
 
 
+def disconnect_item(item_id: str, keep_history: bool = True) -> dict:
+    """Stop Plaid access (and billing) for one bank login via /item/remove, then forget the token.
+    If Plaid can't be reached the local record is kept, so billing never silently continues."""
+    import json as _json
+
+    from plaid.exceptions import ApiException
+    from plaid.model.item_remove_request import ItemRemoveRequest
+
+    from app.privacy import delete_secret
+
+    with session() as s:
+        item = s.get(PlaidItem, item_id)
+        if not item:
+            raise ValueError("That bank isn't connected.")
+        ref = item.access_token
+    try:
+        plaid_client().item_remove(ItemRemoveRequest(access_token=load_secret(ref)))
+        status = "removed at Plaid"
+    except ApiException as e:
+        code = ""
+        try:
+            code = _json.loads(e.body or "{}").get("error_code", "")
+        except Exception:
+            pass
+        if code not in ("ITEM_NOT_FOUND", "INVALID_ACCESS_TOKEN"):
+            raise RuntimeError(f"Plaid didn't confirm the disconnect ({code or e.status}); nothing was deleted. Try again.") from e
+        status = "already gone at Plaid"
+    except RuntimeError as e:
+        if "keychain" not in str(e).lower():
+            raise
+        status = "token was already missing"
+
+    deleted_txns = 0
+    with session() as s:
+        accounts = s.exec(select(Account).where(Account.item_id == item_id)).all()
+        if not keep_history:
+            for a in accounts:
+                for t in s.exec(select(Txn).where(Txn.account_id == a.id)).all():
+                    s.delete(t)
+                    deleted_txns += 1
+                s.delete(a)
+        s.delete(s.get(PlaidItem, item_id))
+        s.commit()
+    delete_secret(ref)
+    return {"status": status, "deleted_transactions": deleted_txns}
+
+
 # ---------------- CSV ----------------
 
 DATE_COLS = ["date", "transaction date", "posted date", "posting date", "trans. date"]
