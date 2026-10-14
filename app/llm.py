@@ -32,7 +32,7 @@ def client() -> anthropic.AsyncAnthropic:
 
 
 def model(role: str) -> str:
-    defaults = {"categorize": "claude-sonnet-5", "agent": "claude-opus-5-5"}
+    defaults = {"categorize": "claude-sonnet-5", "agent": "claude-haiku-5-5", "agent_escalate": "claude-opus-5-5"}
     return (load_config().get("models") or {}).get(role, defaults[role])
 
 

@@ -1,6 +1,7 @@
 // Northstar service worker: keeps a copy of the pages you open so the app still shows your
 // last-synced numbers when the Mac is asleep or off. Asking questions and syncing need the Mac.
-const CACHE = "northstar-v6";
+const CACHE = "northstar-v7";
+const MAX_AGE_MS = 7 * 24 * 3600 * 1000;  // saved pages older than a week are dropped, not shown
 const ASSETS = ["/static/tailwind.js", "/static/htmx.min.js", "/static/chart.umd.min.js", "/static/icon-180.png"];
 const CORE = ["/", "/plan", "/transactions", "/goals", "/retirement", "/runs"];  // refreshed in the background whenever the Mac is reachable
 let lastRefresh = 0;
@@ -63,6 +64,10 @@ self.addEventListener("fetch", (e) => {
   e.respondWith((async () => {
     try {
       const res = await fetch(req);
+      if (res.redirected && new URL(res.url).pathname.startsWith("/login")) {
+        await caches.delete(CACHE);  // signed out or session expired: don't keep financial pages on this phone
+        return res;
+      }
       const html = (res.headers.get("content-type") || "").includes("text/html");
       if (res.ok && !res.redirected && html && !url.pathname.startsWith("/login")) {
         const c = await caches.open(CACHE);
@@ -72,7 +77,12 @@ self.addEventListener("fetch", (e) => {
       return res;
     } catch (_) {
       const c = await caches.open(CACHE);
-      const hit = (await c.match(key)) || (await c.match(url.pathname)) || (await c.match("/"));
+      let hit = (await c.match(key)) || (await c.match(url.pathname)) || (await c.match("/"));
+      const savedAt = hit && Date.parse(hit.headers.get("x-cached-at") || "");
+      if (hit && !(Date.now() - savedAt < MAX_AGE_MS)) {
+        await c.delete(key);
+        hit = null;
+      }
       if (!hit) {
         return new Response(`<meta name=viewport content="width=device-width,initial-scale=1">
           <p style="font:16px system-ui;padding:24px">Your Mac is offline and this page hasn't been saved on this phone yet.

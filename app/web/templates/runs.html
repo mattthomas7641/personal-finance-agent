@@ -5,7 +5,7 @@
 {% call page_header("Questions", "Every answer is checked against queries on your own data.") %}{% endcall %}
 <section class="panel mb-5"><div class="panel-b">{% include "_ask.html" %}</div></section>
 <section class="panel">
-  <div class="panel-h"><h2>History</h2><span class="meta">{{ runs|length }} questions</span></div>
+  <div class="panel-h"><h2>History</h2><span class="meta">{{ runs|length }} questions · ${{ "%.2f"|format(runs|sum(attribute="cost_usd")) }} total · {{ runs|selectattr("verified")|list|length }} verified</span></div>
   <table class="tbl">
     <thead><tr><th>Question</th><th>Status</th><th class="hidden sm:table-cell r">Steps</th><th class="hidden sm:table-cell r">Cost</th></tr></thead>
     <tbody>{% for r in runs %}
