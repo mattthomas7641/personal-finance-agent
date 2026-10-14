@@ -56,7 +56,7 @@ def parse_fidelity_positions(text: str) -> list[dict]:
     """Returns one entry per account: number_last4, name, kind, value, holdings."""
     text = text.lstrip("﻿")
     lines = text.splitlines()
-    start = next((i for i, l in enumerate(lines) if "Current Value" in l and ("Account" in l)), None)
+    start = next((i for i, l in enumerate(lines) if "current value" in l.lower() and "account" in l.lower()), None)
     if start is None:
         raise ValueError("This doesn't look like a Fidelity positions download (no 'Current Value' column found).")
     # Data rows end at the first blank line; the disclaimer follows.
@@ -68,20 +68,23 @@ def parse_fidelity_positions(text: str) -> list[dict]:
     rows = list(csv.DictReader(io.StringIO("\n".join(body))))
     accounts: dict[str, dict] = {}
     for r in rows:
-        r = {k.strip(): (v or "").strip() for k, v in r.items() if isinstance(k, str) and isinstance(v, (str, type(None)))}  # trailing commas add a None key
-        number = r.get("Account Number", "")
-        name = r.get("Account Name", "")
-        if not number and r.get("Account Name/Number"):  # older export: "INDIVIDUAL - X12345678"
-            combined = r["Account Name/Number"]
+        # Fidelity has changed header capitalization over time ("Current Value" vs "Current value"): match case-insensitively.
+        # Trailing commas add a None key, which is skipped.
+        r = {k.strip().lower(): (v or "").strip() for k, v in r.items() if isinstance(k, str) and isinstance(v, (str, type(None)))}
+        number = r.get("account number", "")
+        name = r.get("account name", "")
+        if not number and r.get("account name/number"):  # older export: "INDIVIDUAL - X12345678"
+            combined = r["account name/number"]
             name, _, number = combined.rpartition(" ")
             name = name.rstrip(" -")
-        value = _money(r.get("Current Value"))
+        value = _money(r.get("current value"))
         if not number or value is None:
             continue
         key = re.sub(r"\W", "", number)[-4:]
-        a = accounts.setdefault(key, {"number_last4": key, "name": name or f"Account {key}", "value": 0.0, "holdings": 0})
+        a = accounts.setdefault(key, {"number_last4": key, "name": name or f"Account {key}", "value": 0.0, "holdings": 0,
+                                      "workplace": number.strip().isdigit()})
         a["value"] += value
-        if r.get("Symbol") and "pending" not in r.get("Symbol", "").lower():
+        if r.get("symbol") and "pending" not in r.get("symbol", "").lower():
             a["holdings"] += 1
     if not accounts:
         raise ValueError("No account balances found in this file.")
@@ -89,6 +92,11 @@ def parse_fidelity_positions(text: str) -> list[dict]:
     for a in accounts.values():
         a["value"] = round(a["value"], 2)
         a["kind"] = guess_kind(a["name"])
+        # Fidelity workplace plans (NetBenefits) are often named after the employer ("PROTIVITI") and use
+        # all-digit plan numbers; brokerage/IRA account numbers start with a letter (Z..., X...).
+        if a["kind"] == "other" and a.pop("workplace"):
+            a["kind"] = "401k"
+        a.pop("workplace", None)
         out.append(a)
     return out
 
