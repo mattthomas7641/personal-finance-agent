@@ -107,6 +107,8 @@ class RetirementAccount(SQLModel, table=True):
     balance: float = 0
     monthly_contribution: float = 0  # ignored for 401k (taken from the 401(k) plan) and Roth IRA (from the Roth tracker)
     as_of: Optional[dt.date] = None
+    external_id: str = ""  # e.g. "fidelity:1234" (last 4 of the account number) so re-imports update, not duplicate
+    holdings: int = 0  # number of positions in the last import
 
 
 class Goal(SQLModel, table=True):

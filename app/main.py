@@ -538,13 +538,28 @@ async def budgets_save(request: Request):
 # ---------------- retirement ----------------
 
 @app.get("/retirement", response_class=HTMLResponse)
-def retirement_page(request: Request, saved: str = ""):
+def retirement_page(request: Request, saved: str = "", imported: str = "", error: str = ""):
     with session() as s:
         plan = s.get(RetirementPlan, 1) or RetirementPlan()
         k = s.get(Plan401k, 1)
         accounts = s.exec(select(RetirementAccount).order_by(RetirementAccount.id)).all()
     return render(request, "retirement.html", ov=retirement.overview(), plan=plan, k401=k, accounts=accounts,
-                  saved=saved, today=dt.date.today(), trailing=retirement.trailing_annual_spending())
+                  saved=saved, imported=imported, error=error, today=dt.date.today(),
+                  trailing=retirement.trailing_annual_spending())
+
+
+@app.post("/retirement/import-fidelity")
+async def retirement_import_fidelity(file: UploadFile = File(...)):
+    from app.ingest.brokerage import import_fidelity_positions
+    text = (await file.read()).decode("utf-8", errors="replace")
+    try:
+        res = import_fidelity_positions(text)
+    except ValueError as e:
+        return back(f"/retirement?error={quote(str(e))}#accounts")
+    msg = (f"Imported {len(res['accounts'])} Fidelity accounts (${res['total']:,.0f} total, as of {res['as_of']})"
+           + (f": added {', '.join(res['created'])}" if res["created"] else "")
+           + (f"; updated {', '.join(res['updated'])}" if res["updated"] else ""))
+    return back(f"/retirement?imported={quote(msg)}#accounts")
 
 
 @app.post("/retirement/plan")

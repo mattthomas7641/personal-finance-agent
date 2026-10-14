@@ -67,9 +67,16 @@
 
   <section id="accounts" class="card p-4 sm:p-5">
     <h2 class="font-semibold mb-2">Accounts</h2>
+    {% if imported %}<div class="mb-3 text-sm text-emerald-800 bg-emerald-50 rounded-lg p-3">✓ {{ imported }}</div>{% endif %}
+    {% if error %}<div class="mb-3 text-sm text-red-800 bg-red-50 rounded-lg p-3">{{ error }}</div>{% endif %}
+    <form method="post" action="/retirement/import-fidelity" enctype="multipart/form-data" class="rounded-lg border border-dashed border-zinc-300 p-3 mb-3 text-sm">
+      <div class="font-medium">Import from Fidelity</div>
+      <p class="text-xs text-zinc-500 mt-0.5 mb-2">On fidelity.com: Accounts → <b>Positions</b> → Download. Updates your 401(k), Roth IRA and brokerage balances in one go. The file is read on this computer only.</p>
+      <div class="flex flex-wrap gap-2 items-center"><input type="file" name="file" accept=".csv" required class="text-sm flex-1"><button class="btn btn-primary">Import</button></div>
+    </form>
     {% for a in accounts %}
       <form method="post" action="/retirement/accounts/{{ a.id }}" class="flex flex-wrap items-end gap-2 border-t border-zinc-100 py-2 text-sm">
-        <span class="flex-1 min-w-[8rem]">{{ a.name }} <span class="pill">{{ a.kind }}</span>{% if a.as_of %}<span class="text-xs text-zinc-400"> · {{ a.as_of }}</span>{% endif %}</span>
+        <span class="flex-1 min-w-[8rem]">{{ a.name }} <span class="pill">{{ a.kind }}</span>{% if a.as_of %}<span class="text-xs {{ 'text-amber-600' if (today - a.as_of).days > 45 else 'text-zinc-400' }}"> · {{ a.as_of }}{% if a.external_id %} · imported{% endif %}{% if (today - a.as_of).days > 45 %} · update me{% endif %}</span>{% endif %}</span>
         <label class="w-28">Balance<input name="balance" class="field mt-1" inputmode="decimal" value="{{ a.balance|round|int }}"></label>
         {% if a.kind not in ("401k", "roth_ira") %}<label class="w-28">Adding/mo<input name="monthly_contribution" class="field mt-1" inputmode="decimal" value="{{ a.monthly_contribution|round|int }}"></label>{% endif %}
         <button class="btn">Update</button><button name="delete" value="1" class="text-xs text-zinc-400 underline">remove</button>
