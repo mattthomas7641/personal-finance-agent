@@ -5,6 +5,35 @@
 {% if error %}<div class="mb-4 text-sm text-red-800 bg-red-50 rounded-lg p-3">{{ error }}</div>{% endif %}
 {% if not has_anthropic %}<div class="mb-4 text-sm text-amber-800 bg-amber-50 rounded-lg p-3">No <span class="mono">ANTHROPIC_API_KEY</span> in <span class="mono">.env</span>. Importing works, but AI categorization and questions won't until you add one.</div>{% endif %}
 
+<div id="manual" class="card p-5 mb-4">
+  <h2 class="font-semibold mb-1">Accounts without a bank connection</h2>
+  <p class="text-sm text-zinc-600 mb-3">For accounts Plaid can't reach, like a high-yield savings account. Update the balance whenever you check it. If you move money there from a connected account, add the text that shows up in those transfers and Northstar works out your monthly deposits.</p>
+  {% for a in cash.accounts %}
+    <form method="post" action="/accounts/manual/{{ a.id }}" class="border-t border-zinc-100 py-3 text-sm">
+      <div class="flex flex-wrap items-baseline gap-2 mb-2">
+        <span class="font-medium flex-1">{{ a.name }} <span class="pill">{{ a.kind }}</span>
+          <span class="text-xs {{ 'text-amber-600' if a.stale else 'text-zinc-400' }}">· updated {{ a.as_of }}{% if a.stale %} · update me{% endif %}</span></span>
+        <span class="text-xs text-zinc-500">{% if a.apy_pct %}{{ a.apy_pct }}% APY ≈ {{ a.interest_month|money }}/mo, {{ a.interest_year|money }}/yr{% endif %}
+          {% if a.detect_pattern %} · deposits ≈ {{ a.monthly_deposits|money }}/mo ({{ a.deposit_transactions }} transfers, last 3 months){% endif %}</span>
+      </div>
+      <div class="flex flex-wrap items-end gap-2">
+        <label class="w-32">Balance<input name="balance" class="field mt-1" inputmode="decimal" value="{{ "%.2f"|format(a.balance) }}"></label>
+        <label class="w-24">APY %<input name="apy_pct" class="field mt-1" inputmode="decimal" value="{{ a.apy_pct }}"></label>
+        <label class="flex-1 min-w-[10rem]">Transfers show as<input name="detect_pattern" class="field mt-1" placeholder="e.g. MARCUS or ALLY BANK" value="{{ a.detect_pattern }}"></label>
+        <button class="btn">Update</button><button name="delete" value="1" class="text-xs text-zinc-400 underline" onclick="return confirm('Remove {{ a.name|e }}?')">remove</button>
+      </div>
+    </form>
+  {% endfor %}
+  <form method="post" action="/accounts/manual" class="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end text-sm {{ 'border-t border-zinc-100 pt-3' if cash.accounts }}">
+    <label class="col-span-2 sm:col-span-1">Name<input name="name" required class="field mt-1" placeholder="Marcus HYSA"></label>
+    <label>Type<select name="kind" class="field mt-1">{% for v, l in [("savings", "Savings / HYSA"), ("checking", "Checking"), ("cd", "CD"), ("cash", "Cash"), ("other", "Other")] %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></label>
+    <label>Balance<input name="balance" required class="field mt-1" inputmode="decimal"></label>
+    <label>APY % <span class="text-zinc-400">optional</span><input name="apy_pct" class="field mt-1" inputmode="decimal" placeholder="4.10"></label>
+    <label class="col-span-2 sm:col-span-1">Transfers show as <span class="text-zinc-400">optional</span><input name="detect_pattern" class="field mt-1" placeholder="MARCUS"></label>
+    <button class="btn btn-primary col-span-2 sm:col-span-5">Add account</button>
+  </form>
+</div>
+
 <div class="grid md:grid-cols-2 gap-4">
   <div class="card p-5 space-y-3">
     <h2 class="font-semibold">Connect a bank with Plaid <span class="pill">{{ plaid_env }}</span></h2>

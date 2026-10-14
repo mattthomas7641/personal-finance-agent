@@ -54,6 +54,11 @@
       {% for g in gov.goals %}<div class="text-sm flex justify-between"><span>{{ g.name }}</span>
         <span class="{{ 'text-emerald-700' if g.on_track else 'text-amber-700' }}">{{ "on track" if g.on_track else "+" ~ (g.monthly_gap|money) ~ "/mo needed" }}</span></div>{% endfor %}
     </a>{% endif %}
+    {% if cash.accounts %}<a href="/connect#manual" class="card p-4 block hover:border-zinc-400">
+      <h2 class="font-semibold mb-2">Cash &amp; savings <span class="font-normal text-zinc-500 text-sm">· {{ cash.total|money }}</span></h2>
+      {% for a in cash.accounts %}<div class="text-sm flex justify-between"><span>{{ a.name }}{% if a.stale %} <span class="text-amber-600 text-xs">update</span>{% endif %}</span><span class="num">{{ a.balance|money }}</span></div>{% endfor %}
+      {% if cash.interest_year %}<div class="text-xs text-zinc-500 mt-1">Earning about {{ cash.interest_year|money }}/yr in interest</div>{% endif %}
+    </a>{% endif %}
     {% if ins.price_increases %}<div class="card p-4 !border-amber-300">
       <h2 class="font-semibold mb-2">Price increases</h2>
       {% for p in ins.price_increases %}<div class="text-sm">{{ p.merchant }}: {{ p.previous_amount|money }} → <b>{{ p.amount|money }}</b> <span class="text-zinc-500">since {{ p.price_changed_on }}</span></div>{% endfor %}

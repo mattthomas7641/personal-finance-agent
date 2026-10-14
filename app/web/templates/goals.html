@@ -74,8 +74,10 @@
           {% if g.on_track %}Projected {{ g.projected|money }} at {{ g.monthly_now|money }}/month.
           {% else %}Needs <b>{{ g.required_monthly|money }}/month</b>; you're putting in {{ g.monthly_now|money }}{% if g.kind == "retirement" %} (incl. 401(k) + match){% endif %}. Gap: <b>{{ g.monthly_gap|money }}/month</b>{% if g.monthly_gap_after_401k_change is defined %}, or {{ g.monthly_gap_after_401k_change|money }}/month once your 401(k) % goes up{% endif %}.{% endif %}
         </div>
-        <form method="post" action="/goals/{{ g.id }}/update" class="flex gap-2 mt-2 text-xs items-end">
-          <label class="flex-1">Saved now<input name="current_amount" class="field mt-1" value="{{ g.current }}"></label>
+        {% if g.linked_account %}<div class="text-xs text-emerald-700 mt-1">↻ Following {{ g.linked_account.name }}: balance {{ g.linked_account.balance|money }}{% if g.linked_account.pattern %}, deposits ≈ {{ g.linked_account.detected_monthly|money }}/mo{% endif %}{% if g.linked_account.apy_pct %}, earning {{ g.linked_account.apy_pct }}% APY{% endif %}</div>{% endif %}
+        <form method="post" action="/goals/{{ g.id }}/update" class="flex flex-wrap gap-2 mt-2 text-xs items-end">
+          {% if cash_accounts %}<label class="w-40">Follows<select name="account_id" class="field mt-1"><option value="">nothing</option>{% for a in cash_accounts %}<option value="{{ a.id }}" {% if g.account_id == a.id %}selected{% endif %}>{{ a.name }}</option>{% endfor %}</select></label>{% endif %}
+          <label class="flex-1">Saved now<input name="current_amount" class="field mt-1" value="{{ g.current }}" {% if g.linked_account %}disabled title="Comes from the linked account"{% endif %}></label>
           <label class="flex-1">Adding / month<input name="monthly_contribution" class="field mt-1" value="{{ goals|selectattr('id', 'equalto', g.id)|map(attribute='monthly_contribution')|first }}"></label>
           <button class="btn">Update</button>
         </form>
@@ -88,6 +90,8 @@
         <input type="hidden" name="kind" value="savings">
         <label>Target amount<input name="target_amount" required class="field mt-1" inputmode="decimal"></label>
         <label>By<input type="date" name="target_date" required class="field mt-1"></label>
+        <label class="col-span-2">Follow an account <span class="text-zinc-400">optional: uses its balance and detected deposits</span><select name="account_id" class="field mt-1">
+          <option value="">No, I'll enter amounts</option>{% for a in cash_accounts %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select></label>
         <label>Saved so far<input name="current_amount" class="field mt-1" inputmode="decimal" value="0"></label>
         <label>Adding per month<input name="monthly_contribution" class="field mt-1" inputmode="decimal" value="0"></label>
 
