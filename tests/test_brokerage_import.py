@@ -98,7 +98,7 @@ def test_upload_route():
         assert r.status_code == 303 and "imported=" in r.headers["location"]
         r = c.post("/retirement/import-fidelity", files={"file": ("bank.csv", "a,b\n1,2\n", "text/csv")})
         assert "error=" in r.headers["location"]
-        assert c.get("/retirement").status_code == 200
+        assert c.get("/plan").status_code == 200
 
 
 def test_lowercase_headers_and_employer_named_401k():

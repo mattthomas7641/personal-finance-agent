@@ -13,12 +13,12 @@
   <form method="post" action="/privacy" class="panel min-w-0">
     <div class="panel-h"><h2>What gets sent</h2>{{ badge("Local only" if mode == "local_only" else "Standard", "info" if mode == "local_only" else "muted") }}</div>
     <div class="panel-b space-y-3">
-      <label class="flex gap-3 items-start text-[13.5px] p-3 rounded-lg border {{ 'border-[var(--accent)] bg-[var(--accent-soft)]' if mode != 'local_only' else 'border-[var(--line)]' }}"><input type="radio" name="mode" value="standard" {% if mode != "local_only" %}checked{% endif %} class="mt-0.5">
+      <label class="flex gap-3 items-start text-[14px] p-3 rounded-lg border {{ 'border-[var(--accent)] bg-[var(--accent-soft)]' if mode != 'local_only' else 'border-[var(--line)]' }}"><input type="radio" name="mode" value="standard" {% if mode != "local_only" %}checked{% endif %} class="mt-0.5">
         <span><b class="font-medium">Standard.</b> New transaction descriptions are scrubbed, then sent to Claude to categorize. Questions send scrubbed query results.</span></label>
-      <label class="flex gap-3 items-start text-[13.5px] p-3 rounded-lg border {{ 'border-[var(--accent)] bg-[var(--accent-soft)]' if mode == 'local_only' else 'border-[var(--line)]' }}"><input type="radio" name="mode" value="local_only" {% if mode == "local_only" %}checked{% endif %} class="mt-0.5">
+      <label class="flex gap-3 items-start text-[14px] p-3 rounded-lg border {{ 'border-[var(--accent)] bg-[var(--accent-soft)]' if mode == 'local_only' else 'border-[var(--line)]' }}"><input type="radio" name="mode" value="local_only" {% if mode == "local_only" %}checked{% endif %} class="mt-0.5">
         <span><b class="font-medium">Local only.</b> Categorizing uses your rules, built-in rules and Plaid's categories. Nothing is sent unless you ask a question or choose to categorize with AI.</span></label>
       <label class="lbl">Always remove these words <span class="font-normal c-muted">(one per line)</span>
-        <textarea name="terms" rows="4" class="field mono text-[12.5px]" placeholder="Your name&#10;Your street&#10;Your employer">{{ terms|join("\n") }}</textarea></label>
+        <textarea name="terms" rows="4" class="field mono text-[12px]" placeholder="Your name&#10;Your street&#10;Your employer">{{ terms|join("\n") }}</textarea></label>
       <p class="hint">Names in Zelle, Venmo and Cash App payments, emails, phone numbers and card or account digits are always removed.</p>
     </div>
     <div class="panel-f"><button class="btn btn-primary btn-sm">Save</button></div>
@@ -26,7 +26,7 @@
 
   <section class="panel min-w-0">
     <div class="panel-h"><h2>Never sent</h2></div>
-    <ul class="text-[13.5px]">
+    <ul class="text-[14px]">
       {% for item in ["Bank logins, which you enter only in Plaid's window", "Plaid access tokens, kept in your macOS Keychain where the agent can't read them", "Full account or card numbers and internal transaction IDs", "Anything at all when you're not categorizing or asking a question"] %}
         <li class="flex gap-2.5 px-4 py-2.5 border-b border-[var(--line-soft)] last:border-0"><span class="c-ok">{{ icon(I.ok) }}</span>{{ item }}</li>
       {% endfor %}
@@ -48,16 +48,12 @@
         <input type="password" name="confirm" required minlength="10" class="field" aria-label="Repeat passcode" placeholder="Repeat it">
         <button class="btn btn-primary">{{ "Change passcode" if has_passcode else "Set passcode" }}</button>
       </form>
-    {% else %}<p class="text-[13.5px] mb-4">Signed in on this device. <a class="link" href="/logout">Sign out and delete offline copies</a></p>{% endif %}
-    <ol class="text-[13.5px] space-y-2 max-w-[80ch]">
-      {% set steps = ["Install Tailscale (free) on this Mac and your iPhone, and sign in to the same account on both.",
-        "Passcode is set." if has_passcode else "Set a passcode above."] %}
-      {% for s in steps %}<li class="flex gap-3"><span class="num c-muted w-4 text-right shrink-0">{{ loop.index }}</span><span>{{ s }}</span></li>{% endfor %}
-      <li class="flex gap-3"><span class="num c-muted w-4 text-right shrink-0">3</span><span>On this Mac, run once in Terminal: <span class="mono bg-[var(--head)] border border-[var(--line)] rounded px-1">tailscale serve --bg 8766</span>. If it asks, allow HTTPS certificates for your tailnet.</span></li>
-      <li class="flex gap-3"><span class="num c-muted w-4 text-right shrink-0">4</span><span>On your iPhone, open Safari to
-        {% if tailscale_url %}<span class="mono font-medium">{{ tailscale_url }}</span>{% else %}<span class="mono">https://&lt;your-mac&gt;.&lt;tailnet&gt;.ts.net</span> (shown here once Tailscale is running){% endif %},
-        sign in, then Share, Add to Home Screen.</span></li>
-    </ol>
+    {% else %}<p class="text-[14px] mb-4">Signed in on this device. <a class="link" href="/logout">Sign out and delete offline copies</a></p>{% endif %}
+    <dl class="list max-w-xl">
+      <div><dt class="c-muted">Passcode</dt><dd class="{{ 'c-ok' if has_passcode else 'c-warn' }}">{{ "Set" if has_passcode else "Not set" }}</dd></div>
+      <div><dt class="c-muted">Phone address</dt><dd class="mono text-[13px]">{{ tailscale_url or "Tailscale isn't serving Northstar yet" }}</dd></div>
+    </dl>
+    <p class="hint mt-3">Setup steps are in <a class="link" href="https://github.com/mattthomas7641/personal-finance-agent/blob/main/docs/PHONE.md" target="_blank" rel="noopener">docs/PHONE.md</a>.</p>
   </div>
 </section>
 

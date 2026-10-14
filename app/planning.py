@@ -12,7 +12,7 @@ from datetime import date, timedelta
 
 from sqlmodel import select
 
-from app.config import NON_SPEND
+from app.config import CATEGORIES, NON_SPEND
 from app.db import session
 from app.models import Budget, Goal, Plan401k, Txn
 
@@ -405,3 +405,34 @@ def _cash_summary(today: date) -> dict:
 def _plan() -> Plan401k | None:
     with session() as s:
         return s.get(Plan401k, 1)
+
+
+def budget_table(today: date | None = None) -> list[dict]:
+    """Every spending category with the context you need to set a limit: 3- and 12-month averages,
+    this month so far, the pace for the full month, and the current limit."""
+    import calendar
+
+    today = today or date.today()
+    spend, _ = monthly_by_category(today)
+    full = _full_months(today)
+    this_month = today.strftime("%Y-%m")
+    with session() as s:
+        so_far: dict[str, float] = defaultdict(float)
+        for t in s.exec(select(Txn).where(Txn.date >= today.replace(day=1))).all():
+            if t.category and t.category not in NON_SPEND and t.amount > 0 and t.date.strftime("%Y-%m") == this_month:
+                so_far[t.category] += t.amount
+    limits = budgets()
+    days_in = calendar.monthrange(today.year, today.month)[1]
+    rows = []
+    for c in CATEGORIES:
+        if c in NON_SPEND:
+            continue
+        by_m = spend.get(c, {})
+        avg3 = sum(by_m.get(m, 0) for m in full[:3]) / 3
+        avg12 = sum(by_m.get(m, 0) for m in full) / 12
+        now = so_far.get(c, 0.0)
+        pace = now / today.day * days_in if today.day else now
+        lim = limits.get(c)
+        rows.append({"category": c, "avg3": round(avg3, 2), "avg12": round(avg12, 2), "this_month": round(now, 2),
+                     "pace": round(pace, 2), "limit": lim, "over_pace": bool(lim and pace > lim)})
+    return sorted(rows, key=lambda r: -max(r["avg3"], r["this_month"]))

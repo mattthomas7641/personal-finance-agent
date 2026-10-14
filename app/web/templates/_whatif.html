@@ -1,0 +1,12 @@
+{% if w %}
+<div class="rounded-lg border border-[var(--line)] p-3">
+  <div class="text-[13px] c-muted">At {{ w.retire_age }} ({{ w.years }} years) you'd have</div>
+  <div class="text-[24px] font-semibold num {{ 'c-ok' if w.on_track else '' }}">{{ w.at_age|money0 }}</div>
+  <dl class="list mt-1 text-[13px]">
+    <div><dt class="c-muted">Target</dt><dd class="num">{{ w.target|money0 }}</dd></div>
+    <div><dt class="c-muted">You'd reach it at</dt><dd>{{ ("age " ~ w.reach_age) if w.reach_age else "not before 90" }}</dd></div>
+    <div><dt class="c-muted">Needed a month to hit it by {{ w.retire_age }}</dt><dd class="num">{{ w.need_monthly|money0 }}</dd></div>
+    <div><dt class="c-muted">Short by</dt><dd class="num {{ 'c-bad' if w.gap_monthly else 'c-ok' }}">{{ (w.gap_monthly|money0 ~ " a month") if w.gap_monthly else "Nothing" }}</dd></div>
+  </dl>
+</div>
+{% else %}<p class="hint">Add your birth year and a target to try changes.</p>{% endif %}

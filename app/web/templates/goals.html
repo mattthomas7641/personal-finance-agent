@@ -1,22 +1,16 @@
 {% extends "base.html" %}
 {% from "_ui.html" import page_header, badge, alert, icon, I, saved_toast %}
-{% block title %}Goals · Northstar{% endblock %}
+{% block title %}Goals & budgets · Northstar{% endblock %}
 {% block content %}
 {% set k = ov.k401 %}{% set cf = ov.cash_flow %}
-{% call page_header("Goals", "Retirement, Roth IRA, 401(k) and savings goals in one place.") %}
+{% set roth = ov.roth %}
+{% call page_header("Goals & budgets", "Every goal in one list, the accounts that feed them, and your monthly spending limits.") %}
   {{ saved_toast(saved) }}
   <a href="#new" class="btn btn-primary" onclick="document.getElementById('new').open = true">{{ icon(I.plus) }}Add savings goal</a>
 {% endcall %}
 
-<section class="panel kpis mb-5" style="--n: 3">
-  <div class="kpi"><div class="stat-l">Average income</div><div class="stat-v">{{ cf.avg_income|money0 }}</div><div class="stat-s">per month</div></div>
-  <div class="kpi"><div class="stat-l">Average spending</div><div class="stat-v">{{ cf.avg_spending|money0 }}</div><div class="stat-s">per month</div></div>
-  <div class="kpi"><div class="stat-l">Left over</div><div class="stat-v {{ 'c-ok' if cf.avg_surplus >= 0 else 'c-bad' }}">{{ cf.avg_surplus|money0 }}</div>
-    <div class="stat-s">per month · {{ cf.months|first }} to {{ cf.months|last }}</div></div>
-</section>
-
 <section class="panel mb-5">
-  <div class="panel-h"><h2>All goals</h2><span class="meta">{{ register|selectattr("tone", "in", ["ok", "info"])|list|length }} of {{ register|length }} on track</span></div>
+  <div class="panel-h"><h2>All goals</h2><span class="meta">{{ register|selectattr("tone", "equalto", "ok")|list|length }} of {{ register|length }} on track</span></div>
   <table class="tbl">
     <thead><tr><th>Goal</th><th class="hidden md:table-cell w-[24%]">Progress</th><th class="hidden lg:table-cell">What it takes</th><th class="r">Status</th></tr></thead>
     <tbody>
@@ -24,15 +18,15 @@
         <tr class="click" onclick="location.href='{{ g.href }}'">
           <td><a href="{{ g.href }}" class="font-medium">{{ g.name }}</a><div class="text-[12px] c-muted">{{ g.detail }}</div>
             <div class="lg:hidden text-[12px] c-muted mt-0.5">{{ g.takes }}</div></td>
-          <td class="hidden md:table-cell">{% if g.target %}<div class="bar"><span class="{{ g.tone if g.tone in ('ok', 'warn', 'bad') else '' }}" style="width: {{ g.progress_pct }}%"></span></div>
+          <td class="hidden md:table-cell">{% if g.target %}<div class="bar"><span style="width: {{ g.progress_pct }}%"></span></div>
             <div class="flex justify-between text-[12px] c-muted mt-1"><span>{{ g.current|money0 }} of {{ g.target|money0 }}</span><span>{{ g.progress_pct }}%</span></div>{% else %}<span class="c-muted">—</span>{% endif %}</td>
           <td class="hidden lg:table-cell text-[13px]">{{ g.takes }}</td>
-          <td class="r">{{ badge(g.status, g.tone) }}</td>
+          <td class="r whitespace-nowrap text-[13px] font-medium {{ 'c-ok' if g.tone == 'ok' else ('c-bad' if g.tone == 'bad' else ('c-warn' if g.tone == 'warn' else 'c-muted')) }}">{{ g.status }}</td>
         </tr>
       {% endfor %}
     </tbody>
   </table>
-  <div class="panel-f">Your retirement target and age are set on <a class="link" href="/plan#settings">Plan</a>. Roth IRA and Coast FIRE use your balances on <a class="link" href="/retirement">Retirement</a>.</div>
+  <div class="panel-f">Your retirement target, age and investment balances live on <a class="link" href="/plan">Plan</a>.</div>
 </section>
 
 <div class="grid lg:grid-cols-2 gap-5 mb-5">
@@ -75,8 +69,34 @@
     </details>
   </section>
 
+  <!-- Roth IRA -->
+  <section id="roth" class="panel scroll-mt-20">
+    <div class="panel-h"><h2>Roth IRA {{ roth.tax_year }}</h2><span class="meta">{{ "Maxed" if roth.maxed else ("Not eligible" if roth.allowed == 0 else (roth.remaining|money0) ~ " left") }}</span></div>
+    <div class="panel-b">
+      <div class="flex justify-between text-[13px]"><span>{{ roth.contributed|money0 }} contributed</span><span class="c-muted">allowed {{ roth.allowed|money0 }}</span></div>
+      <div class="bar mt-1.5"><span style="width: {{ [100, (roth.contributed / roth.allowed * 100) if roth.allowed else 0]|min }}%"></span></div>
+      <p class="hint mt-1.5">{{ roth.limit_note }} · {{ roth.contributions_source }}</p>
+      <p class="text-[14px] mt-3">{% if roth.maxed %}Maxed for {{ roth.tax_year }}.
+        {% elif roth.allowed == 0 %}No direct contributions allowed at this income.
+        {% else %}<b>{{ roth.monthly_to_max_by_dec|money0 }} a month</b> finishes it by Dec 31, or {{ roth.monthly_to_max_by_deadline|money0 }} a month by the {{ roth.deadline }} deadline.{% endif %}</p>
+      {% for n in roth.notes %}{% call alert("warn", "mt-2") %}{{ n }}{% endcall %}{% endfor %}
+    </div>
+    <details class="border-t border-[var(--line-soft)]">
+      <summary class="px-4 py-3 flex items-center gap-1.5 text-[13px] font-medium c-muted"><span class="chev">{{ icon(I.chev, 14) }}</span>Roth details</summary>
+      <form method="post" action="/goals/roth" class="grid grid-cols-2 gap-3 px-4 pb-4">
+        <label class="lbl">Tax filing status<select name="filing_status" class="field">
+          {% for v, l in [("single", "Single / head of household"), ("mfj", "Married filing jointly"), ("mfs", "Married filing separately")] %}<option value="{{ v }}" {% if rp.filing_status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+        <label class="lbl">MAGI <span class="font-normal c-muted">(optional)</span><input name="magi" class="field" inputmode="decimal" value="{{ rp.magi|round|int if rp.magi else '' }}"></label>
+        <label class="lbl">Contributed this year<input name="roth_contributed" class="field" inputmode="decimal" value="{{ rp.roth_contributed|round|int if rp.roth_contributed else '' }}"></label>
+        <label class="lbl">Or detect transfers containing<input name="roth_detect_pattern" class="field" placeholder="FIDELITY ROTH" value="{{ rp.roth_detect_pattern }}"></label>
+        <label class="flex items-center gap-2 text-[13px] col-span-2"><input type="checkbox" name="roth_target" value="1" {% if rp.roth_target %}checked{% endif %}> Plan to max it (counts toward your monthly investing)</label>
+        <div class="col-span-2"><button class="btn btn-primary">Save Roth details</button></div>
+      </form>
+    </details>
+  </section>
+
   <!-- Savings goals -->
-  <section id="goals" class="panel scroll-mt-20">
+  <section id="goals" class="panel scroll-mt-20 lg:col-span-2">
     <div class="panel-h"><h2>Savings goals</h2><span class="meta">{{ ov.goals|length }} active</span></div>
     {% for g in ov.goals %}
       <details id="goal-{{ g.id }}" class="border-b border-[var(--line-soft)] scroll-mt-20">
@@ -116,41 +136,26 @@
   </section>
 </div>
 
-<!-- Budget plan -->
-<section id="plan" class="panel mb-5">
-  {% set p = ov.plan %}
-  <div class="panel-h"><h2>Budget plan for these goals</h2>{% if p %}{{ badge("Covered" if p.covered else ((p.short_by|money0) ~ "/mo short"), "ok" if p.covered else "warn") }}{% endif %}</div>
-  {% if p %}
-    <div class="panel-b pb-0">
-      <p class="text-[13.5px] max-w-[80ch]">You need about <b>{{ p.target_monthly|money0 }}/mo</b> more
-        {% set parts = [] %}{% if ov.monthly_needed_for_401k %}{% set _ = parts.append((ov.monthly_needed_for_401k|money0) ~ " less take-home from a higher 401(k) %") %}{% endif %}{% if ov.monthly_needed_for_roth %}{% set _ = parts.append((ov.monthly_needed_for_roth|money0) ~ " to max your Roth IRA by Dec 31") %}{% endif %}{% if ov.monthly_needed_for_retirement %}{% set _ = parts.append((ov.monthly_needed_for_retirement|money0) ~ " for your retirement gap") %}{% endif %}{% if parts %}, including {{ parts|join(", ") }}{% endif %}.
-        {{ p.from_surplus|money0 }} can come from what's left over each month (half your surplus stays as a buffer){% if p.cuts %} and {{ p.from_cuts|money0 }} from the trims below{% endif %}.</p>
-      {% if not p.covered %}{% call alert("warn", "mt-3") %}Still {{ p.short_by|money0 }}/mo short. Push a goal's date out, lower a target, or raise income.{% endcall %}{% endif %}
-    </div>
-    {% if p.cuts %}
-    <table class="tbl mt-3">
-      <thead><tr><th>Category</th><th class="r">Average</th><th class="r">New limit</th><th class="r">Saves</th><th class="hidden md:table-cell">Why</th></tr></thead>
-      <tbody>{% for c in p.cuts %}<tr><td class="font-medium">{{ c.category }}</td><td class="r c-muted">{{ c.avg_last_3_months|money0 }}</td>
-        <td class="r font-medium">{{ c.new_budget|money0 }}</td><td class="r c-ok">{{ c.cut|money0 }}</td><td class="hidden md:table-cell c-muted text-[13px]">{{ c.reasons|join("; ") }}</td></tr>{% endfor %}</tbody>
-    </table>
-    {% endif %}
-    <div class="panel-f flex flex-wrap items-center justify-between gap-2">
-      <span>{% if p.subscriptions_to_review %}Subscriptions to review: {% for s in p.subscriptions_to_review %}{{ s.merchant }} {{ s.amount|money }}/mo{{ ", " if not loop.last }}{% endfor %}{% endif %}</span>
-      {% if p.cuts %}<form method="post" action="/budgets/apply_plan"><button class="btn btn-primary btn-sm">Use as my budgets</button></form>{% endif %}
-    </div>
-  {% else %}
-    <div class="panel-b text-[13px] c-muted">{% if ov.goals or ov.k401 %}Your goals are covered by what you already save. Nothing to cut right now.{% else %}Add your 401(k) details or a savings goal and this builds a budget to hit it.{% endif %}</div>
-  {% endif %}
-</section>
-
 <!-- Budgets -->
+{% set cf = ov.cash_flow %}
 <section id="budgets" class="panel scroll-mt-20">
-  <div class="panel-h"><h2>Monthly spending limits</h2><span class="meta">Leave blank for no limit</span></div>
-  <form method="post" action="/budgets" class="panel-b grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-    {% for c in categories if c not in ("Income", "Transfers") %}
-      <label class="lbl">{{ c }}<input name="b_{{ c }}" class="field" inputmode="decimal" value="{{ ov.budgets.get(c, '')|int if ov.budgets.get(c) else '' }}"></label>
-    {% endfor %}
-    <div class="col-span-2 sm:col-span-4 lg:col-span-6"><button class="btn btn-primary">Save limits</button></div>
+  <div class="panel-h"><h2>Monthly spending limits</h2>
+    <span class="meta">Average income {{ cf.avg_income|money0 }} · spending {{ cf.avg_spending|money0 }} · left over {{ cf.avg_surplus|money0 }} a month</span></div>
+  <form method="post" action="/budgets">
+    <div class="overflow-x-auto"><table class="tbl">
+      <thead><tr><th>Category</th><th class="r hidden sm:table-cell">12-mo avg</th><th class="r">3-mo avg</th><th class="r hidden sm:table-cell">This month</th><th class="r hidden md:table-cell">Pace</th><th class="r">Limit</th></tr></thead>
+      <tbody>
+      {% for b in budgets %}
+        <tr><td class="font-medium whitespace-nowrap">{{ b.category }}</td>
+          <td class="r hidden sm:table-cell c-muted">{{ b.avg12|money0 }}</td><td class="r">{{ b.avg3|money0 }}</td>
+          <td class="r hidden sm:table-cell">{{ b.this_month|money0 }}</td>
+          <td class="r hidden md:table-cell {{ 'c-bad font-medium' if b.over_pace else 'c-muted' }}">{{ b.pace|money0 }}</td>
+          <td class="r"><input name="b_{{ b.category }}" class="field !w-24 !h-8 text-right" inputmode="decimal" placeholder="—" value="{{ b.limit|int if b.limit else '' }}" aria-label="{{ b.category }} limit"></td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <div class="panel-f flex flex-wrap items-center justify-between gap-2"><span>Leave blank for no limit. <a class="link" href="/plan#cuts">Suggested limits for your retirement target</a> are on Plan.</span>
+      <button class="btn btn-primary btn-sm">Save limits</button></div>
   </form>
 </section>
 <p class="hint mt-4">{{ ov.disclaimer }}</p>

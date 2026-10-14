@@ -122,16 +122,15 @@ def _compact_plan(p: dict) -> dict:
 
 def _compact_goals(ov: dict) -> dict:
     ov = dict(ov)
-    for k in ("cash_accounts", "budgets", "disclaimer", "today"):
+    # "plan" is the older goals-based cut list; spending cuts now come only from get_plan, so the agent
+    # can't quote two different limits for the same category.
+    for k in ("cash_accounts", "budgets", "disclaimer", "today", "plan"):
         ov.pop(k, None)
     if ov.get("k401"):
         ov["k401"] = {k: v for k, v in ov["k401"].items() if k not in ("pay_schedule", "notes")}
     if ov.get("retirement"):
         ov["retirement"] = {k: v for k, v in ov["retirement"].items() if k != "accounts"}
-    keep = ("category", "avg_last_3_months", "cut", "new_budget", "reasons")
-    if ov.get("plan"):
-        ov["plan"] = {**{k: v for k, v in ov["plan"].items() if k != "cash_flow"},
-                      "cuts": [{k: c[k] for k in keep if k in c} for c in ov["plan"].get("cuts", [])]}
+    keep = ("category", "avg_last_3_months", "reasons")
     ov["where_to_cut"] = [{k: c[k] for k in keep if k in c} for c in ov.get("where_to_cut", [])]
     return ov
 
@@ -150,6 +149,14 @@ def get_goals() -> str:
 
 def get_insights() -> str:
     ins = insights.all_insights()
+    live = {a["key"] for a in insights.alerts(ins)}  # skip what the user already dismissed
+    ins["duplicates"] = [d for d in ins["duplicates"] if f"dup:{':'.join(d['ids'])}" in live]
+    ins["unusual"] = [u for u in ins["unusual"] if f"big:{u['id']}" in live]
     for d in ins["duplicates"]:
         d.pop("ids", None)
+    for u in ins["unusual"]:
+        u.pop("id", None)
+    for r in ins["subscriptions"]:
+        for k in ("key", "history"):
+            r.pop(k, None)
     return json.dumps(redact_obj(ins), default=str)

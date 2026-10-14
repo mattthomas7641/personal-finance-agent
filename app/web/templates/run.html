@@ -2,8 +2,8 @@
 {% from "_ui.html" import badge, alert, icon, I %}
 {% block title %}{{ run.question[:60] }} · Northstar{% endblock %}
 {% block content %}
-<a href="/runs" class="hint hover:underline">Questions</a>
-<div class="page-h mt-1"><div class="min-w-0"><h1>{{ run.question }}</h1>
+<a href="/runs" class="hint hover:underline">Ask</a>
+<div class="page-h mt-1"><div class="min-w-0"><h1>{{ "Weekly digest" if run.kind == "digest" else run.question }}</h1>
   <p>{{ run.turns }} steps · ${{ "%.3f"|format(run.cost_usd) }}{% if run.model %} · {{ run.model.replace("claude-", "").replace(",", " → ") }}{% endif %}{% if run.seconds %} · {{ run.seconds }}s · {{ "{:,}".format(run.input_tokens + run.cache_read_tokens) }} tokens in ({{ ((run.cache_read_tokens / (run.input_tokens + run.cache_read_tokens) * 100) if (run.input_tokens + run.cache_read_tokens) else 0)|round|int }}% cached), {{ "{:,}".format(run.output_tokens) }} out{% endif %} · <a class="link" href="/runs/{{ run.id }}.json">Trace JSON</a></p></div>
   <div>{% if run.status == "running" %}{{ badge("Running", "info") }}{% elif run.verified %}{{ badge("Verified", "ok") }}{% elif run.status == "done" %}{{ badge("Unverified", "warn") }}{% else %}{{ badge(run.status|capitalize, "bad") }}{% endif %}</div></div>
 
@@ -13,11 +13,31 @@
     <div class="panel-b">
       {% if run.verified %}{% call alert("ok", "mb-4") %}Every number below came from a query or calculation on your data.{% endcall %}
       {% elif run.status == "done" %}{% call alert("warn", "mb-4") %}Some numbers couldn't be verified. Check the steps below.{% endcall %}{% endif %}
-      <div class="pre leading-relaxed text-[14px] max-w-[75ch]">{{ run.answer }}</div>
+      <div class="leading-relaxed text-[14px] max-w-[75ch]">{{ run.answer|answer }}</div>
       {% for c in charts %}<div class="mt-5"><div class="text-[13px] font-medium mb-2">{{ c.title }}</div><div class="relative h-56"><canvas id="chart{{ loop.index }}"></canvas></div></div>{% endfor %}
     </div>
     <div class="panel-f">{% with parent=run.id, placeholder="Ask a follow-up" %}{% include "_ask.html" %}{% endwith %}</div>
   </section>
+  {% if proposals %}
+  <section id="proposals" class="mb-5 scroll-mt-20">
+    <div class="section-h"><h2>Suggested changes</h2><span class="meta">Nothing changes until you approve</span></div>
+    <div class="grid sm:grid-cols-2 gap-3">
+      {% for p in proposals %}
+        <div class="panel p-4">
+          <div class="flex items-center justify-between gap-2">
+            <b class="font-semibold text-[14px]">{% if p.kind == "budget" %}{{ p.data.category }} limit: {{ p.data.monthly_limit|money0 }} a month{% else %}Retire at {{ p.data.retirement_age }} with {{ p.data.target|money0 }}{% endif %}</b>
+            {% if p.status != "pending" %}<span class="text-[12px] font-medium {{ 'c-ok' if p.status == 'approved' else 'c-muted' }}">{{ p.status|capitalize }}</span>{% endif %}
+          </div>
+          <p class="text-[13px] c-muted mt-1">{{ p.reason }}</p>
+          {% if p.status == "pending" %}<div class="flex gap-2 mt-3">
+            <form method="post" action="/proposals/{{ p.id }}/approve"><button class="btn btn-primary btn-sm">Approve</button></form>
+            <form method="post" action="/proposals/{{ p.id }}/reject"><button class="btn btn-sm">Reject</button></form>
+          </div>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
 {% else %}
   {% call alert("info", "mb-5") %}Working on it. This page updates when the answer is ready.{% endcall %}
 {% endif %}

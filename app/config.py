@@ -32,7 +32,9 @@ def load_config() -> dict:
 CATEGORIES = [
     "Income", "Rent & Mortgage", "Utilities", "Groceries", "Dining", "Coffee", "Transport", "Travel",
     "Shopping", "Subscriptions", "Entertainment", "Health & Fitness", "Personal Care", "Fees & Interest",
-    "Transfers", "Other",
+    "Transfers", "Other", "Excluded",
 ]
-# Excluded from "spending" totals.
-NON_SPEND = {"Income", "Transfers"}
+# Not counted as spending. "Excluded" is for charges you mark yourself: reimbursed work expenses, one-offs.
+NON_SPEND = {"Income", "Transfers", "Excluded"}
+# The AI categorizer never picks "Excluded"; only you do.
+AI_CATEGORIES = [c for c in CATEGORIES if c != "Excluded"]

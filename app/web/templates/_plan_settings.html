@@ -1,9 +1,13 @@
-<form method="post" action="/plan/settings" class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
-  <label class="lbl">Birth year<input name="birth_year" class="field" inputmode="numeric" value="{{ birth or '' }}" placeholder="1999"></label>
+<form method="post" action="/plan/settings" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+  <input type="hidden" name="has_harsh" value="1">
+  <label class="lbl">Birth year<input name="birth_year" class="field" inputmode="numeric" value="{{ birth or '' }}" placeholder="1996"></label>
   <label class="lbl">Retire at age<input name="retirement_age" class="field" inputmode="numeric" value="{{ rp.retirement_age }}"></label>
-  <label class="lbl">Return after inflation %<input name="expected_return_pct" class="field" inputmode="decimal" value="{{ rp.expected_return_pct }}"></label>
   <label class="lbl">Target, low end ($)<input name="fire_target_low" class="field" inputmode="decimal" value="{{ rp.fire_target_low|int if rp.fire_target_low else '' }}" placeholder="1500000"></label>
   <label class="lbl">Target, high end ($)<input name="fire_target_high" class="field" inputmode="decimal" value="{{ rp.fire_target_high|int if rp.fire_target_high else '' }}" placeholder="2000000"></label>
+  <label class="lbl">Return after inflation %<input name="expected_return_pct" class="field" inputmode="decimal" value="{{ rp.expected_return_pct }}"></label>
+  <label class="lbl">Withdrawal rate %<input name="withdrawal_rate_pct" class="field" inputmode="decimal" value="{{ rp.withdrawal_rate_pct }}"></label>
+  <label class="lbl">Spending in retirement a year<input name="annual_spending" class="field" inputmode="decimal" placeholder="{{ trailing|round|int if trailing else '' }} (last 12 months)" value="{{ rp.annual_spending|round|int if rp.annual_spending else '' }}"></label>
   <label class="flex items-center gap-2 text-[13px] self-end h-9"><input type="checkbox" name="harsh" value="1" {% if rp.harsh %}checked{% endif %}> Be blunt about spending</label>
-  <div class="col-span-2 sm:col-span-3"><button class="btn btn-primary">Save target</button></div>
+  <div class="col-span-2 sm:col-span-4"><button class="btn btn-primary">Save</button>
+    <span class="hint ml-2">Without a target, plans aim at the FI number: retirement spending ÷ withdrawal rate.</span></div>
 </form>

@@ -1,4 +1,4 @@
-"""Goals, budgets, the retirement-by-age plan and retirement accounts."""
+"""Plan (retire-by-age target, projections, investment accounts) and Goals & budgets (401(k), Roth IRA, savings goals, limits)."""
 from __future__ import annotations
 
 import datetime as dt
@@ -25,13 +25,30 @@ def goals_page(request: Request, saved: str = ""):
     with session() as s:
         plan = s.get(Plan401k, 1) or Plan401k()
         goals = s.exec(select(Goal).order_by(Goal.target_date)).all()
+        rp = s.get(RetirementPlan, 1) or RetirementPlan()
     ov = planning.overview()
     try:
         fp = fire.plan()
     except Exception:
         fp = None
-    return render(request, "goals.html", ov=ov, plan=plan, goals=goals, register=fire.goal_register(ov, fp), fp=fp, saved=saved, categories=CATEGORIES, cash_accounts=cash.accounts(),
+    return render(request, "goals.html", ov=ov, plan=plan, rp=rp, goals=goals, register=fire.goal_register(ov, fp), fp=fp,
+                  saved=saved, budgets=planning.budget_table(), cash_accounts=cash.accounts(),
                   sched=planning.detect_paychecks(), today=dt.date.today())
+
+
+@router.post("/goals/roth")
+def save_roth(filing_status: str = Form("single"), magi: str = Form(""), roth_contributed: str = Form("0"),
+              roth_detect_pattern: str = Form(""), roth_target: str = Form("")):
+    with session() as s:
+        rp = s.get(RetirementPlan, 1) or RetirementPlan(id=1)
+        rp.filing_status = filing_status if filing_status in ("single", "mfj", "mfs") else "single"
+        rp.magi = _num(magi) if magi.strip() else None
+        rp.roth_contributed = _num(roth_contributed)
+        rp.roth_detect_pattern = roth_detect_pattern.strip()
+        rp.roth_target = bool(roth_target)
+        s.add(rp)
+        s.commit()
+    return back("/goals?saved=roth#roth")
 
 
 @router.post("/goals/401k")
@@ -86,14 +103,6 @@ def goal_delete(gid: int):
     return back("/goals#goals")
 
 
-@router.post("/budgets/apply_plan")
-def budgets_apply_plan():
-    ov = planning.overview()
-    if ov["plan"]:
-        planning.apply_budgets([(c["category"], c["new_budget"]) for c in ov["plan"]["cuts"]])
-    return back("/goals?saved=budgets#plan")
-
-
 @router.post("/budgets")
 async def budgets_save(request: Request):
     form = await request.form()
@@ -110,28 +119,51 @@ async def budgets_save(request: Request):
     return back("/goals?saved=budgets#budgets")
 
 
-# ---------------- plan (FIRE) ----------------
+# ---------------- plan (retire-by-age target + retirement accounts) ----------------
 
 @router.get("/plan", response_class=HTMLResponse)
-def plan_page(request: Request, saved: str = ""):
+def plan_page(request: Request, saved: str = "", imported: str = "", error: str = ""):
     with session() as s:
         rp = s.get(RetirementPlan, 1) or RetirementPlan()
         k = s.get(Plan401k, 1)
-    return render(request, "plan.html", p=fire.plan(), rp=rp, birth=rp.birth_year or (k.birth_year if k else None), saved=saved)
+        accounts = s.exec(select(RetirementAccount).order_by(RetirementAccount.id)).all()
+    fire.snapshot()
+    return render(request, "plan.html", p=fire.plan(), rp=rp, birth=rp.birth_year or (k.birth_year if k else None),
+                  rs=retirement.retirement_status(), accounts=accounts, history=fire.history(), saved=saved,
+                  imported=imported, error=error, today=dt.date.today(), trailing=retirement.trailing_annual_spending())
+
+
+@router.get("/plan/whatif", response_class=HTMLResponse)
+def plan_whatif(request: Request, retire_age: str = "40", monthly: str = "0", return_pct: str = "5", target: str = "0"):
+    w = fire.what_if(int(_num(retire_age, 40)), _num(monthly), _num(return_pct, 5), _num(target))
+    return render(request, "_whatif.html", w=w)
 
 
 @router.post("/plan/settings")
-def plan_settings(birth_year: str = Form(""), retirement_age: str = Form("40"), fire_target_low: str = Form(""),
-                  fire_target_high: str = Form(""), expected_return_pct: str = Form("5"), harsh: str = Form("")):
+@router.post("/retirement/plan")  # old form address
+def plan_settings(birth_year: str = Form(""), retirement_age: str = Form(""), fire_target_low: str = Form(None),
+                  fire_target_high: str = Form(None), expected_return_pct: str = Form(""), harsh: str = Form(""),
+                  withdrawal_rate_pct: str = Form(""), annual_spending: str = Form(None), has_harsh: str = Form("")):
+    """The one place for retirement assumptions. Updates the saved row in place, so fields owned by other
+    forms (Roth settings on Goals) are never reset."""
     with session() as s:
         rp = s.get(RetirementPlan, 1) or RetirementPlan(id=1)
         if birth_year.strip():
             rp.birth_year = int(_num(birth_year))
-        rp.retirement_age = int(_num(retirement_age, 40))
-        rp.fire_target_low = _num(fire_target_low) if fire_target_low.strip() else None
-        rp.fire_target_high = _num(fire_target_high) if fire_target_high.strip() else None
-        rp.expected_return_pct = _num(expected_return_pct, 5)
-        rp.harsh = bool(harsh)
+        if retirement_age.strip():
+            rp.retirement_age = int(_num(retirement_age, rp.retirement_age))
+        if fire_target_low is not None:
+            rp.fire_target_low = _num(fire_target_low) if fire_target_low.strip() else None
+        if fire_target_high is not None:
+            rp.fire_target_high = _num(fire_target_high) if fire_target_high.strip() else None
+        if expected_return_pct.strip():
+            rp.expected_return_pct = _num(expected_return_pct, 5)
+        if withdrawal_rate_pct.strip():
+            rp.withdrawal_rate_pct = _num(withdrawal_rate_pct, 4) or 4
+        if annual_spending is not None:
+            rp.annual_spending = _num(annual_spending) if annual_spending.strip() else None
+        if has_harsh:  # the checkbox only exists on the Plan form; other callers leave it alone
+            rp.harsh = bool(harsh)
         s.add(rp)
         s.commit()
     return back("/plan?saved=1")
@@ -142,20 +174,12 @@ def plan_apply_cuts():
     p = fire.plan()
     if p and p.get("harsh_cuts"):
         planning.apply_budgets([(c["category"], c["target"]) for c in p["harsh_cuts"]])
-    return back("/plan?saved=1")
+    return back("/goals?saved=budgets#budgets")
 
 
-# ---------------- retirement ----------------
-
-@router.get("/retirement", response_class=HTMLResponse)
-def retirement_page(request: Request, saved: str = "", imported: str = "", error: str = ""):
-    with session() as s:
-        plan = s.get(RetirementPlan, 1) or RetirementPlan()
-        k = s.get(Plan401k, 1)
-        accounts = s.exec(select(RetirementAccount).order_by(RetirementAccount.id)).all()
-    return render(request, "retirement.html", ov=retirement.overview(), plan=plan, k401=k, accounts=accounts,
-                  saved=saved, imported=imported, error=error, today=dt.date.today(),
-                  trailing=retirement.trailing_annual_spending())
+@router.get("/retirement")
+def retirement_page():
+    return back("/plan#accounts")  # merged into Plan
 
 
 @router.post("/retirement/import-fidelity")
@@ -163,42 +187,19 @@ async def retirement_import_fidelity(file: UploadFile = File(...)):
     from app.ingest.brokerage import import_fidelity_positions
     raw = await file.read()
     if len(raw) > 5_000_000:
-        return back(f"/retirement?error={quote('That file is too large for a Fidelity positions export.')}#accounts")
+        return back(f"/plan?error={quote('That file is too large for a Fidelity positions export.')}#accounts")
     text = raw.decode("utf-8", errors="replace").replace("\x00", "")
     try:
         res = import_fidelity_positions(text)
     except ValueError as e:
-        return back(f"/retirement?error={quote(str(e))}#accounts")
+        return back(f"/plan?error={quote(str(e))}#accounts")
     except Exception:  # csv.Error and anything else a malformed file can trigger
-        return back(f"/retirement?error={quote('Could not read that file. Download Positions from Fidelity again and retry.')}#accounts")
+        return back(f"/plan?error={quote('Could not read that file. Download Positions from Fidelity again and retry.')}#accounts")
+    fire.snapshot()
     msg = (f"Imported {len(res['accounts'])} Fidelity accounts (${res['total']:,.0f} total, as of {res['as_of']})"
            + (f": added {', '.join(res['created'])}" if res["created"] else "")
            + (f"; updated {', '.join(res['updated'])}" if res["updated"] else ""))
-    return back(f"/retirement?imported={quote(msg)}#accounts")
-
-
-@router.post("/retirement/plan")
-def retirement_plan_save(birth_year: str = Form(""), retirement_age: str = Form("60"), annual_spending: str = Form(""),
-                         withdrawal_rate_pct: str = Form("4"), expected_return_pct: str = Form("5"),
-                         filing_status: str = Form("single"), magi: str = Form(""), roth_contributed: str = Form("0"),
-                         roth_detect_pattern: str = Form(""), roth_target: str = Form(""), include_gap_in_plan: str = Form("")):
-    with session() as s:
-        # Update in place: this form doesn't include the Plan page's fields (target, blunt mode), which must survive.
-        rp = s.get(RetirementPlan, 1) or RetirementPlan(id=1)
-        rp.birth_year = int(birth_year) if birth_year.strip() else None
-        rp.retirement_age = int(_num(retirement_age, rp.retirement_age))
-        rp.annual_spending = _num(annual_spending) if annual_spending.strip() else None
-        rp.withdrawal_rate_pct = _num(withdrawal_rate_pct, 4) or 4
-        rp.expected_return_pct = _num(expected_return_pct, 5)
-        rp.filing_status = filing_status if filing_status in ("single", "mfj", "mfs") else "single"
-        rp.magi = _num(magi) if magi.strip() else None
-        rp.roth_contributed = _num(roth_contributed)
-        rp.roth_detect_pattern = roth_detect_pattern.strip()
-        rp.roth_target = bool(roth_target)
-        rp.include_gap_in_plan = bool(include_gap_in_plan)
-        s.add(rp)
-        s.commit()
-    return back("/retirement?saved=1")
+    return back(f"/plan?imported={quote(msg)}#accounts")
 
 
 @router.post("/retirement/accounts")
@@ -208,7 +209,26 @@ def retirement_account_add(name: str = Form(...), kind: str = Form("other"), bal
         s.add(RetirementAccount(name=name.strip(), kind=kind, balance=_num(balance),
                                 monthly_contribution=_num(monthly_contribution), as_of=dt.date.today()))
         s.commit()
-    return back("/retirement#accounts")
+    fire.snapshot()
+    return back("/plan#accounts")
+
+
+@router.post("/plan/balances")
+async def plan_balances(request: Request):
+    """Edit every investment balance at once (fields balance_<id> and monthly_<id>)."""
+    form = await request.form()
+    with session() as s:
+        for a in s.exec(select(RetirementAccount)).all():
+            if f"balance_{a.id}" in form and str(form[f"balance_{a.id}"]).strip() != "":
+                new = _num(str(form[f"balance_{a.id}"]))
+                if new != a.balance:
+                    a.balance, a.as_of = new, dt.date.today()
+            if f"monthly_{a.id}" in form:
+                a.monthly_contribution = _num(str(form[f"monthly_{a.id}"]))
+            s.add(a)
+        s.commit()
+    fire.snapshot()
+    return back("/plan?saved=balances#accounts")
 
 
 @router.post("/retirement/accounts/{aid}")
@@ -221,4 +241,5 @@ def retirement_account_update(aid: int, balance: str = Form(...), monthly_contri
             a.balance, a.monthly_contribution, a.as_of = _num(balance), _num(monthly_contribution), dt.date.today()
             s.add(a)
         s.commit()
-    return back("/retirement#accounts")
+    fire.snapshot()
+    return back("/plan#accounts")
