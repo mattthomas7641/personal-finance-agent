@@ -50,7 +50,7 @@ python -m evals.run qa           # 20 questions, ~$1-2
 | Categorization | run `python -m evals.run categorize` |
 | Q&A (20 questions) | run `python -m evals.run qa` — accuracy, verified rate, steps and cost per question |
 
-Plus 96 tests (`pytest`), including 401(k) limit/paycheck/match maths and budget-plan invariants,, including network/passcode/CSRF tests and an offline end-to-end test,, including privacy tests (no names/phones/digits reach the model, local-only never calls the LLM, tokens only in the keychain),: SQL sandbox escapes, calculator injection, checker edge cases, CSV formats, categorization cascade, insights on planted facts, and the agent loop (including hallucination → rejection → fix) against a scripted model.
+Plus 100 tests (`pytest`), including 401(k) limit/paycheck/match maths and budget-plan invariants,, including network/passcode/CSRF tests and an offline end-to-end test,, including privacy tests (no names/phones/digits reach the model, local-only never calls the LLM, tokens only in the keychain),: SQL sandbox escapes, calculator injection, checker edge cases, CSV formats, categorization cascade, insights on planted facts, and the agent loop (including hallucination → rejection → fix) against a scripted model.
 
 ## Run it
 
