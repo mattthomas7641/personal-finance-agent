@@ -2,6 +2,25 @@
   "checker": {
     "caught": "7/7",
     "false_positives": "0/5",
-    "at": "2026-10-14 00:15"
+    "at": "2026-10-14 02:04"
+  },
+  "categorize": {
+    "merchant_accuracy": 0.95,
+    "unique_descriptors": 47,
+    "llm_descriptors": 40,
+    "builtin_correct": "7",
+    "transaction_accuracy": 0.961,
+    "cost_usd": 0.0147,
+    "cost_per_1k_txns": 0.0198,
+    "seconds": 10.5,
+    "at": "2026-10-14 02:03"
+  },
+  "qa": {
+    "accuracy": 1.0,
+    "verified_rate": 1.0,
+    "avg_steps": 4.4,
+    "avg_cost_usd": 0.0329,
+    "n": 20,
+    "at": "2026-10-14 02:04"
   }
 }
