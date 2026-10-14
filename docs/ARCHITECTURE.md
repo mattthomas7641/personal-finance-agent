@@ -50,20 +50,6 @@ sequenceDiagram
 | `app/planning.py`, `retirement.py`, `fire.py`, `cash.py` | Deterministic finance maths (401(k), Roth, FI/Coast FIRE, retire-by-age plan, cash accounts) |
 | `evals/run.py` | Evals on a synthetic ledger with SQL-derived ground truth; per-model scoreboard |
 
-## Why this shape (and what I deliberately didn't build)
-
-| Tempting choice | Why not here |
-|---|---|
-| Microservices / Kubernetes | One user, one Mac, one process. The failure domains that matter are per bank and per tool, and those are isolated in code with tests, not in containers. |
-| Vector DB / RAG | Questions are about exact numbers in a few thousand rows. SQL over a view is exact and auditable; embeddings would make answers fuzzier and impossible to verify. |
-| LangChain, CrewAI, AutoGen | The loop is about 150 lines. Owning it is what lets me put the verification gate, evidence ledger, model escalation, cost cap and redaction boundary exactly where they belong. |
-| Multi-agent orchestration | One agent with narrow read-only tools and a deterministic checker beats agents checking each other: the check is code, not another model's opinion. |
-| Postgres / cloud database | SQLite on an encrypted disk, with a read-only authorized connection for the model, is the smallest attack surface for bank data. Nothing leaves the machine except redacted text. |
-| OAuth / multi-tenant auth | The threat model is one owner. A private tailnet, a passcode and signed cookies are enough, and I can explain every line. |
-| MCP server for the tools | Same process, same user. MCP would add a trust boundary I don't need and widen what the model can reach. |
-| Always using the biggest model | The checker makes a cheap model safe to try first. Haiku answers; Opus takes over only after a rejected answer. The eval shows the same accuracy at 70% lower cost. |
-| Fine-tuning a categorizer | Rules → memory → Plaid → batched LLM already reaches 96% at about 2¢ per 1,000 transactions. |
-
 ## Failure isolation
 
 | Failure | Behaviour | Test |
