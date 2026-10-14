@@ -260,3 +260,15 @@ def test_tagging_a_large_charge_keeps_it_in_the_month_but_not_the_averages():
         assert s.get(Dismissal, "big:feat-tv")  # tagging from an alert also dismisses it
     with client() as c:
         assert c.post("/txn/feat-tv/tag", data={"tag": "nonsense"}).status_code == 400
+
+
+def test_subscription_on_an_unconnected_card_counts_toward_spending():
+    today = dt.date(2026, 10, 15)
+    before = planning.cash_flow(today)["avg_spending"]
+    subscriptions.add_manual("AWS", "AMAZON WEB SERVICES", "monthly", 40.0)
+    item = next(i for i in subscriptions.overview(today)["items"] if i["key"] == "manual:AMAZON WEB SERVICES")
+    after = planning.cash_flow(today)
+    assert item["off_ledger"] and item["annual"] == 480
+    assert after["avg_spending"] == pytest.approx(before + 40) and after["off_ledger"] == 40
+    subscriptions.decide("manual:AMAZON WEB SERVICES", "cancelled", today=today)
+    assert planning.cash_flow(today)["off_ledger"] == 0
