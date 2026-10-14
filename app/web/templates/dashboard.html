@@ -7,6 +7,12 @@
   {% if uncategorized %}<a href="/transactions?category=Uncategorized" class="text-sm text-amber-700 underline">{{ uncategorized }} uncategorized</a>{% endif %}
 </div>
 
+{% for it in attention %}
+<a href="/connect#banks" class="block mb-3 rounded-lg px-4 py-3 text-sm {{ 'bg-amber-50 text-amber-900' if it.status == 'expiring' else 'bg-red-50 text-red-900' }}">
+  {% if it.status == "expiring" %}⏳ {{ it.institution or "A bank" }}'s connection expires {{ it.consent_expires.strftime("%b %d") if it.consent_expires else "soon" }}. Reconnect to keep syncing →
+  {% else %}⚠ {{ it.institution or "A bank" }} stopped syncing and needs you to log in again. Reconnect →{% endif %}
+</a>
+{% endfor %}
 <div class="card p-4 mb-4">{% include "_ask.html" %}
   <div class="flex flex-wrap gap-2 mt-3 text-xs">
     {% for q in ["What changed in my spending this month vs last?", "Which subscriptions am I paying for, and what do they cost per year?", "How much do I spend eating out per month on average?", "Am I on track to max out my 401(k)?", "Where should I cut back to hit my goals?"] %}

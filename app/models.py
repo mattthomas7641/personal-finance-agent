@@ -27,6 +27,12 @@ class PlaidItem(SQLModel, table=True):
     institution: str = ""
     cursor: str = ""
     env: str = "sandbox"
+    # Health, for update mode: ok | login_required | expiring | error
+    status: str = "ok"
+    error_code: str = ""
+    error_message: str = ""
+    consent_expires: Optional[datetime] = None
+    last_synced: Optional[datetime] = None
     created_at: datetime = Field(default_factory=now)
 
 

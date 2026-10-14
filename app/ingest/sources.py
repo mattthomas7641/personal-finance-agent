@@ -77,34 +77,99 @@ def connect_sandbox_bank() -> str:
     return exchange_public_token(public_token, "First Platypus Bank (sandbox)")
 
 
+# Plaid error codes that mean the user has to log in to their bank again (update mode).
+LOGIN_REQUIRED = {"ITEM_LOGIN_REQUIRED", "PENDING_EXPIRATION", "PENDING_DISCONNECT", "INVALID_UPDATED_USERNAME",
+                  "INSUFFICIENT_CREDENTIALS", "USER_SETUP_REQUIRED", "MFA_NOT_SUPPORTED", "NO_ACCOUNTS"}
+EXPIRING_DAYS = 14
+
+
+def _plaid_error(e) -> tuple[str, str]:
+    import json as _json
+    try:
+        b = _json.loads(getattr(e, "body", "") or "{}")
+        return b.get("error_code", "") or "", b.get("display_message") or b.get("error_message") or str(e)
+    except Exception:
+        return "", str(e)
+
+
+def _set_status(item_id: str, **kw) -> None:
+    with session() as s:
+        it = s.get(PlaidItem, item_id)
+        if it:
+            for k, v in kw.items():
+                setattr(it, k, v)
+            s.add(it)
+            s.commit()
+
+
+def check_item_health(client, item: PlaidItem) -> str:
+    """/item/get: surfaces login errors and upcoming consent expiry (common for OAuth banks)."""
+    from datetime import datetime, timedelta, timezone
+
+    from plaid.model.item_get_request import ItemGetRequest
+
+    res = client.item_get(ItemGetRequest(access_token=load_secret(item.access_token)))["item"]
+    err = res.get("error")
+    expires = res.get("consent_expiration_time")
+    if err and err.get("error_code"):
+        code = err["error_code"]
+        _set_status(item.id, status="login_required" if code in LOGIN_REQUIRED else "error", error_code=code,
+                    error_message=err.get("display_message") or err.get("error_message") or code, consent_expires=expires)
+        return "login_required" if code in LOGIN_REQUIRED else "error"
+    soon = expires is not None and expires - datetime.now(timezone.utc) < timedelta(days=EXPIRING_DAYS)
+    _set_status(item.id, status="expiring" if soon else "ok", error_code="", error_message="", consent_expires=expires)
+    return "expiring" if soon else "ok"
+
+
 def sync_plaid() -> dict:
-    """Pull new/changed/removed transactions for every connected Item using /transactions/sync cursors."""
+    """Pull new/changed/removed transactions for every connected Item using /transactions/sync cursors.
+    Each bank is synced independently: one that needs re-login is flagged for update mode and the rest continue."""
+    from datetime import datetime, timezone
+
+    from plaid.exceptions import ApiException
     from plaid.model.accounts_get_request import AccountsGetRequest
     from plaid.model.transactions_sync_request import TransactionsSyncRequest
 
     client = plaid_client()
-    stats = {"added": 0, "modified": 0, "removed": 0, "items": 0}
+    stats = {"added": 0, "modified": 0, "removed": 0, "items": 0, "needs_attention": []}
     with session() as s:
         items = s.exec(select(PlaidItem)).all()
     for item in items:
         stats["items"] += 1
-        for a in client.accounts_get(AccountsGetRequest(access_token=load_secret(item.access_token)))["accounts"]:
-            with session() as s:
-                s.merge(Account(id=a["account_id"], name=a["name"], type=str(a["type"]), mask=a.get("mask") or "",
-                                source="plaid", item_id=item.id))
-                s.commit()
-        cursor, added, modified, removed = item.cursor, [], [], []
-        while True:
-            kw = {"access_token": load_secret(item.access_token)}
-            if cursor:
-                kw["cursor"] = cursor
-            res = client.transactions_sync(TransactionsSyncRequest(**kw))
-            added += res["added"]
-            modified += res["modified"]
-            removed += res["removed"]
-            cursor = res["next_cursor"]
-            if not res["has_more"]:
-                break
+        try:
+            health = check_item_health(client, item)
+            if health in ("login_required", "error"):
+                stats["needs_attention"].append(item.institution or item.id)
+                continue
+            for a in client.accounts_get(AccountsGetRequest(access_token=load_secret(item.access_token)))["accounts"]:
+                with session() as s:
+                    s.merge(Account(id=a["account_id"], name=a["name"], type=str(a["type"]), mask=a.get("mask") or "",
+                                    source="plaid", item_id=item.id))
+                    s.commit()
+            for attempt in range(3):  # Plaid asks to restart pagination if data changes mid-sync
+                cursor, added, modified, removed = item.cursor, [], [], []
+                try:
+                    while True:
+                        kw = {"access_token": load_secret(item.access_token)}
+                        if cursor:
+                            kw["cursor"] = cursor
+                        res = client.transactions_sync(TransactionsSyncRequest(**kw))
+                        added += res["added"]
+                        modified += res["modified"]
+                        removed += res["removed"]
+                        cursor = res["next_cursor"]
+                        if not res["has_more"]:
+                            break
+                    break
+                except ApiException as e:
+                    if _plaid_error(e)[0] != "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION" or attempt == 2:
+                        raise
+        except ApiException as e:
+            code, msg = _plaid_error(e)
+            _set_status(item.id, status="login_required" if code in LOGIN_REQUIRED else "error", error_code=code,
+                        error_message=msg)
+            stats["needs_attention"].append(item.institution or item.id)
+            continue
         with session() as s:
             for t in added + modified:
                 pfc = t.get("personal_finance_category")
@@ -121,12 +186,36 @@ def sync_plaid() -> dict:
                     s.delete(old)
             it = s.get(PlaidItem, item.id)
             it.cursor = cursor
+            it.last_synced = datetime.now(timezone.utc)
             s.add(it)
             s.commit()
         stats["added"] += len(added)
         stats["modified"] += len(modified)
         stats["removed"] += len(removed)
     return stats
+
+
+def create_update_link_token(item_id: str) -> str:
+    """Link token in update mode: reopens Plaid for an existing Item so the user can log in again.
+    Same Item, same history; no public token exchange afterwards."""
+    from plaid.model.country_code import CountryCode
+    from plaid.model.link_token_create_request import LinkTokenCreateRequest
+    from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
+
+    with session() as s:
+        item = s.get(PlaidItem, item_id)
+        if not item:
+            raise ValueError("That bank isn't connected.")
+        ref = item.access_token
+    req = LinkTokenCreateRequest(
+        client_name="Northstar", language="en", country_codes=[CountryCode("US")],
+        user=LinkTokenCreateRequestUser(client_user_id="local-user"), access_token=load_secret(ref),
+    )
+    return plaid_client().link_token_create(req)["link_token"]
+
+
+def mark_reconnected(item_id: str) -> None:
+    _set_status(item_id, status="ok", error_code="", error_message="")
 
 
 def disconnect_item(item_id: str, keep_history: bool = True) -> dict:
