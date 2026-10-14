@@ -96,6 +96,12 @@ Text fields are privacy-redacted: [person], [phone], [acct], [email] and # repla
 The latest month may be partial."""
 
 
+def get_goals() -> str:
+    from app.planning import overview
+
+    return json.dumps(redact_obj(overview()), default=str)
+
+
 def get_insights() -> str:
     ins = insights.all_insights()
     for d in ins["duplicates"]:

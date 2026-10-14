@@ -50,7 +50,7 @@ python -m evals.run qa           # 20 questions, ~$1-2
 | Categorization | run `python -m evals.run categorize` |
 | Q&A (20 questions) | run `python -m evals.run qa` — accuracy, verified rate, steps and cost per question |
 
-Plus 75 tests (`pytest`), including network/passcode/CSRF tests and an offline end-to-end test,, including privacy tests (no names/phones/digits reach the model, local-only never calls the LLM, tokens only in the keychain),: SQL sandbox escapes, calculator injection, checker edge cases, CSV formats, categorization cascade, insights on planted facts, and the agent loop (including hallucination → rejection → fix) against a scripted model.
+Plus 96 tests (`pytest`), including 401(k) limit/paycheck/match maths and budget-plan invariants,, including network/passcode/CSRF tests and an offline end-to-end test,, including privacy tests (no names/phones/digits reach the model, local-only never calls the LLM, tokens only in the keychain),: SQL sandbox escapes, calculator injection, checker edge cases, CSV formats, categorization cascade, insights on planted facts, and the agent loop (including hallucination → rejection → fix) against a scripted model.
 
 ## Run it
 
@@ -65,6 +65,13 @@ Open http://localhost:8766 → **Accounts**:
 - **Your real accounts** (`PLAID_ENV=production`, needs Plaid Production or trial access): *Connect a real bank* opens Plaid Link; syncs every 6 hours while running.
 - **Any bank, today**: download your activity as CSV and import it.
 
+## Goals, 401(k) and budgets
+
+- **401(k) max-out tracker.** Enter a few pay-stub numbers (salary, contribution %, year-to-date, employer match); the pay schedule is detected from your deposits. It projects your year-end total against the IRS limit (including age 50+ / 60-63 catch-up), tells you the exact % to land on the limit with the paychecks left, or the % to set from January if that's unrealistic, and warns about missed match or maxing out early without a true-up.
+- **Savings and retirement goals** with required monthly amounts; retirement projections use your own return assumption and count 401(k) contributions + match (without double counting a planned 401(k) increase).
+- **Budget plan.** Works out how much more you need per month, takes part from your average surplus, then trims discretionary categories (never rent, utilities, health) with a reason for each: *"up 23% vs your 12-month average; over budget 1 of the last 3 months"*. One click turns it into spending limits.
+- The agent can answer *"Am I on track to max out my 401(k)?"* or *"Where should I cut back?"* from the same numbers. It won't recommend investments or tax strategies.
+
 ## On your phone
 
 Runs on your Mac; your iPhone reaches it privately over [Tailscale](https://tailscale.com) (free) and installs it to the home screen.
@@ -73,6 +80,11 @@ Runs on your Mac; your iPhone reaches it privately over [Tailscale](https://tail
 - **Passcode** for every device except the Mac itself (PBKDF2 hash, signed 30-day sessions, lockout after repeated wrong guesses). It can only be changed from the Mac.
 - **Works when the Mac is off.** A service worker keeps the pages you've opened (refreshing the main ones in the background) and shows them with a *"Mac offline · data from 3h ago"* banner; actions that need the Mac are disabled. Signing out deletes the saved copies. Tested end to end in headless Chromium.
 - **Auto-start:** `scripts/install-autostart.sh` runs it at login via launchd.
+
+## Roadmap
+
+- Credit card rewards: track points per card, earn rate by category, and which card to use where.
+- Plaid Investments: read 401(k) contributions directly instead of from your pay stub.
 
 ## Layout
 

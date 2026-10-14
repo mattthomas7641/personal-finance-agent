@@ -54,6 +54,40 @@ class Rule(SQLModel, table=True):
     created_at: datetime = Field(default_factory=now)
 
 
+class Budget(SQLModel, table=True):
+    category: str = Field(primary_key=True)
+    monthly_limit: float
+    source: str = "manual"  # manual | plan (applied from a savings plan)
+
+
+class Plan401k(SQLModel, table=True):
+    """What the bank data can't see: numbers from your pay stub / benefits portal."""
+    id: int = Field(default=1, primary_key=True)
+    annual_salary: float = 0
+    pay_frequency: str = "auto"  # auto | weekly | biweekly | semimonthly | monthly
+    contribution_pct: float = 0  # pre-tax + Roth deferral, % of gross pay
+    ytd_contributed: float = 0  # your own deferrals this calendar year (from your latest pay stub)
+    ytd_as_of: Optional[dt.date] = None  # pay date of that stub
+    match_rate_pct: float = 0  # employer matches this % of what you put in...
+    match_up_to_pct: float = 0  # ...on contributions up to this % of salary
+    has_true_up: bool = False  # employer tops up the match at year end if you max early
+    birth_year: Optional[int] = None
+    marginal_tax_rate_pct: float = 22  # rough federal+state bracket, for take-home impact estimates
+    updated_at: datetime = Field(default_factory=now)
+
+
+class Goal(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    kind: str = "savings"  # savings | retirement
+    target_amount: float
+    target_date: dt.date
+    current_amount: float = 0
+    monthly_contribution: float = 0
+    expected_return_pct: float = 5.0  # retirement goals only; your assumption, after inflation
+    created_at: datetime = Field(default_factory=now)
+
+
 class Outbound(SQLModel, table=True):
     """Local log of every piece of text sent to the Claude API (after redaction)."""
     id: Optional[int] = Field(default=None, primary_key=True)

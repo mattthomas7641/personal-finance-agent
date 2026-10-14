@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Goals{% endblock %}
+{% block content %}
+{% set k = ov.k401 %}{% set cf = ov.cash_flow %}
+<div class="flex items-end justify-between flex-wrap gap-2 mb-4">
+  <div><h1 class="text-xl font-semibold">Goals</h1>
+    <p class="text-sm text-zinc-500">{{ ov.disclaimer }}</p></div>
+  {% if saved %}<span class="text-sm text-emerald-700">Saved ✓</span>{% endif %}
+</div>
+
+<div class="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
+  <div class="card p-3 sm:p-4"><div class="text-xs text-zinc-500">Avg income</div><div class="text-[15px] sm:text-2xl font-semibold num mt-1">{{ cf.avg_income|money }}</div></div>
+  <div class="card p-3 sm:p-4"><div class="text-xs text-zinc-500">Avg spending</div><div class="text-[15px] sm:text-2xl font-semibold num mt-1">{{ cf.avg_spending|money }}</div></div>
+  <div class="card p-3 sm:p-4"><div class="text-xs text-zinc-500">Left over / mo</div><div class="text-[15px] sm:text-2xl font-semibold num mt-1 {{ 'text-emerald-700' if cf.avg_surplus >= 0 else 'text-red-700' }}">{{ cf.avg_surplus|money }}</div></div>
+</div>
+<p class="text-xs text-zinc-500 -mt-2 mb-4">Averages over {{ cf.months|first }} to {{ cf.months|last }}, the last 3 complete months.</p>
+
+<div class="grid lg:grid-cols-2 gap-4">
+  <!-- 401(k) -->
+  <section id="k401" class="card p-4 sm:p-5">
+    <h2 class="font-semibold">401(k): on track to max out?</h2>
+    {% if k %}
+      <div class="mt-3">
+        <div class="flex justify-between text-sm"><span>{{ k.year }}: {{ k.ytd|money }} so far</span><span class="num">limit {{ k.limit|money }}</span></div>
+        <div class="h-2.5 rounded bg-zinc-100 mt-1 relative overflow-hidden">
+          <div class="absolute h-2.5 bg-zinc-300" style="width: {{ (k.projected_year_end / k.limit * 100)|round }}%"></div>
+          <div class="absolute h-2.5 bg-zinc-900" style="width: {{ (k.ytd / k.limit * 100)|round }}%"></div>
+        </div>
+        <div class="text-xs text-zinc-500 mt-1">Projected by Dec 31 at {{ k.current_pct|round(2) }}%: <b>{{ k.projected_year_end|money }}</b>
+          {% if not k.on_track_to_max %}({{ k.shortfall|money }} short){% endif %} · {{ k.remaining_paychecks }} paychecks left · {{ k.limit_note }}</div>
+      </div>
+      <div class="mt-3 rounded-lg p-3 text-sm {{ 'bg-emerald-50 text-emerald-900' if k.on_track_to_max else 'bg-amber-50 text-amber-900' }}">{{ k.recommendation }}</div>
+      <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mt-3">
+        <dt class="text-zinc-500">% needed this year</dt><dd class="num text-right">{{ k.required_pct if k.required_pct is not none else "—" }}%</dd>
+        <dt class="text-zinc-500">% to max next year</dt><dd class="num text-right">{{ k.next_year_pct_to_max }}%</dd>
+        <dt class="text-zinc-500">Employer match / year</dt><dd class="num text-right">{{ k.employer_match_year|money }} {{ "✓ full" if k.getting_full_match else "· not full" }}</dd>
+        <dt class="text-zinc-500">Pay schedule</dt><dd class="text-right">{{ k.pay_schedule.frequency }}{% if k.pay_schedule.detected_from_deposits %} <span class="text-zinc-400">(from deposits)</span>{% endif %}</dd>
+      </dl>
+      {% for n in k.notes %}<p class="text-sm text-amber-800 mt-2">⚠ {{ n }}</p>{% endfor %}
+    {% else %}
+      <p class="text-sm text-zinc-600 mt-2">Your bank only sees take-home pay, so enter a few numbers from your latest pay stub or benefits site.</p>
+    {% endif %}
+
+    <details class="mt-4" {% if not k %}open{% endif %}><summary class="text-sm cursor-pointer text-zinc-600">{{ "Update" if k else "Enter" }} your 401(k) details</summary>
+      <form method="post" action="/goals/401k" class="grid grid-cols-2 gap-2 mt-3 text-sm">
+        <label>Annual salary (gross)<input name="annual_salary" required class="field mt-1" inputmode="decimal" value="{{ plan.annual_salary or '' }}"></label>
+        <label>Contribution % per paycheck<input name="contribution_pct" required class="field mt-1" inputmode="decimal" value="{{ plan.contribution_pct or '' }}"></label>
+        <label>Contributed this year so far<input name="ytd_contributed" class="field mt-1" inputmode="decimal" value="{{ plan.ytd_contributed or '' }}"></label>
+        <label>…as of pay date<input type="date" name="ytd_as_of" class="field mt-1" value="{{ plan.ytd_as_of or today }}"></label>
+        <label>Employer matches (%)<input name="match_rate_pct" class="field mt-1" inputmode="decimal" placeholder="e.g. 100" value="{{ plan.match_rate_pct or '' }}"></label>
+        <label>…up to (% of salary)<input name="match_up_to_pct" class="field mt-1" inputmode="decimal" placeholder="e.g. 4" value="{{ plan.match_up_to_pct or '' }}"></label>
+        <label>Birth year (for catch-up limits)<input name="birth_year" class="field mt-1" inputmode="numeric" value="{{ plan.birth_year or '' }}"></label>
+        <label>Pay frequency<select name="pay_frequency" class="field mt-1">
+          {% for f in ["auto", "weekly", "biweekly", "semimonthly", "monthly"] %}<option {% if plan.pay_frequency == f %}selected{% endif %} value="{{ f }}">{{ "detect from deposits (" ~ sched.frequency ~ ")" if f == "auto" else f }}</option>{% endfor %}</select></label>
+        <label>Tax bracket % (estimate)<input name="marginal_tax_rate_pct" class="field mt-1" inputmode="decimal" value="{{ plan.marginal_tax_rate_pct }}"></label>
+        <label class="flex items-center gap-2 mt-6"><input type="checkbox" name="has_true_up" value="1" {% if plan.has_true_up %}checked{% endif %}> Employer does a year-end match true-up</label>
+        <button class="btn btn-primary col-span-2">Save</button>
+      </form>
+    </details>
+  </section>
+
+  <!-- Goals -->
+  <section id="goals" class="card p-4 sm:p-5">
+    <h2 class="font-semibold mb-2">Savings &amp; retirement goals</h2>
+    {% for g in ov.goals %}
+      <div class="border-t border-zinc-100 py-3">
+        <div class="flex justify-between items-baseline"><span class="font-medium">{{ g.name }}</span>
+          <span class="pill {{ '!bg-emerald-100 !text-emerald-800' if g.on_track else '!bg-amber-100 !text-amber-800' }}">{{ "on track" if g.on_track else "behind" }}</span></div>
+        <div class="h-2 rounded bg-zinc-100 mt-2"><div class="h-2 rounded bg-zinc-900" style="width: {{ g.progress_pct }}%"></div></div>
+        <div class="text-xs text-zinc-500 mt-1">{{ g.current|money }} of {{ g.target|money }} by {{ g.target_date }} · {{ g.months_left }} months
+          {% if g.kind == "retirement" %}· assumes {{ g.assumed_return_pct }}%/yr after inflation{% endif %}</div>
+        <div class="text-sm mt-1">
+          {% if g.on_track %}Projected {{ g.projected|money }} at {{ g.monthly_now|money }}/month.
+          {% else %}Needs <b>{{ g.required_monthly|money }}/month</b>; you're putting in {{ g.monthly_now|money }}{% if g.kind == "retirement" %} (incl. 401(k) + match){% endif %}. Gap: <b>{{ g.monthly_gap|money }}/month</b>{% if g.monthly_gap_after_401k_change is defined %}, or {{ g.monthly_gap_after_401k_change|money }}/month once your 401(k) % goes up{% endif %}.{% endif %}
+        </div>
+        <form method="post" action="/goals/{{ g.id }}/update" class="flex gap-2 mt-2 text-xs items-end">
+          <label class="flex-1">Saved now<input name="current_amount" class="field mt-1" value="{{ g.current }}"></label>
+          <label class="flex-1">Adding / month<input name="monthly_contribution" class="field mt-1" value="{{ goals|selectattr('id', 'equalto', g.id)|map(attribute='monthly_contribution')|first }}"></label>
+          <button class="btn">Update</button>
+        </form>
+        <form method="post" action="/goals/{{ g.id }}/delete" class="mt-1"><button class="text-xs text-zinc-400 underline">delete</button></form>
+      </div>
+    {% else %}<p class="text-sm text-zinc-500">No goals yet: an emergency fund, a trip, a house deposit, or a retirement number.</p>{% endfor %}
+    <details class="mt-3" {% if not ov.goals %}open{% endif %}><summary class="text-sm cursor-pointer text-zinc-600">Add a goal</summary>
+      <form method="post" action="/goals/new" class="grid grid-cols-2 gap-2 mt-3 text-sm">
+        <label class="col-span-2">Name<input name="name" required class="field mt-1" placeholder="Emergency fund"></label>
+        <label>Type<select name="kind" class="field mt-1"><option value="savings">Savings</option><option value="retirement">Retirement</option></select></label>
+        <label>Target amount<input name="target_amount" required class="field mt-1" inputmode="decimal"></label>
+        <label>By<input type="date" name="target_date" required class="field mt-1"></label>
+        <label>Saved so far<input name="current_amount" class="field mt-1" inputmode="decimal" value="0"></label>
+        <label>Adding per month<input name="monthly_contribution" class="field mt-1" inputmode="decimal" value="0"></label>
+        <label>Return assumption % (retirement)<input name="expected_return_pct" class="field mt-1" inputmode="decimal" value="5"></label>
+        <button class="btn btn-primary col-span-2">Add goal</button>
+      </form>
+    </details>
+  </section>
+
+  <!-- Plan -->
+  <section id="plan" class="card p-4 sm:p-5 lg:col-span-2">
+    <h2 class="font-semibold">Budget plan to hit your goals</h2>
+    {% set p = ov.plan %}
+    {% if p %}
+      <p class="text-sm text-zinc-600 mt-1">You need about <b>{{ p.target_monthly|money }}/month</b> more
+        {% if ov.monthly_needed_for_401k %}({{ ov.monthly_needed_for_401k|money }} of it is the take-home drop from a higher 401(k) %){% endif %}.
+        {{ p.from_surplus|money }} can come from what's left over each month (keeping half your surplus as a buffer){% if p.cuts %}, and {{ p.from_cuts|money }} from these trims{% endif %}.</p>
+      {% if p.cuts %}
+      <table class="w-full text-sm mt-3"><thead class="text-zinc-500 text-left"><tr><th class="py-1">Category</th><th class="text-right">Avg/mo</th><th class="text-right">New limit</th><th class="text-right">Saves</th><th class="pl-4 hidden sm:table-cell">Why</th></tr></thead>
+        <tbody>{% for c in p.cuts %}<tr class="border-t border-zinc-100"><td class="py-1.5">{{ c.category }}</td><td class="text-right num">{{ c.avg_last_3_months|money }}</td>
+          <td class="text-right num font-medium">{{ c.new_budget|money }}</td><td class="text-right num text-emerald-700">{{ c.cut|money }}</td><td class="pl-4 text-zinc-500 hidden sm:table-cell">{{ c.reasons|join("; ") }}</td></tr>{% endfor %}</tbody></table>
+      <form method="post" action="/budgets/apply_plan" class="mt-3"><button class="btn btn-primary">Use these as my budget limits</button></form>
+      {% endif %}
+      {% if not p.covered %}<p class="text-sm text-amber-800 mt-3">⚠ Still {{ p.short_by|money }}/month short. Options: push a goal's date out, lower a target, or raise income.</p>{% endif %}
+      {% if p.subscriptions_to_review %}<div class="mt-3 text-sm"><b>Subscriptions to review:</b>
+        {% for s in p.subscriptions_to_review %}{{ s.merchant }} {{ s.amount|money }}/mo{{ "," if not loop.last }} {% endfor %}</div>{% endif %}
+    {% else %}
+      <p class="text-sm text-zinc-600 mt-1">{% if ov.goals or ov.k401 %}You're on track: nothing to cut right now.{% else %}Add your 401(k) details or a goal and this builds a budget plan to hit it.{% endif %}</p>
+    {% endif %}
+    {% if ov.where_to_cut %}
+      <h3 class="font-medium text-sm mt-4 mb-1">Where your spending has room</h3>
+      {% for c in ov.where_to_cut %}<div class="text-sm flex justify-between border-t border-zinc-100 py-1"><span>{{ c.category }} <span class="text-zinc-500">· {{ c.reasons|join("; ") }}</span></span><span class="num">{{ c.avg_last_3_months|money }}/mo</span></div>{% endfor %}
+    {% endif %}
+  </section>
+
+  <!-- Budgets -->
+  <section id="budgets" class="card p-4 sm:p-5 lg:col-span-2">
+    <h2 class="font-semibold mb-1">Monthly spending limits</h2>
+    <p class="text-sm text-zinc-600 mb-3">The overview shows your pace against these and warns before you go over. Leave blank for no limit.</p>
+    <form method="post" action="/budgets" class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+      {% for c in categories if c not in ("Income", "Transfers") %}
+        <label>{{ c }}<input name="b_{{ c }}" class="field mt-1" inputmode="decimal" value="{{ ov.budgets.get(c, '')|int if ov.budgets.get(c) else '' }}"></label>
+      {% endfor %}
+      <button class="btn btn-primary col-span-2 sm:col-span-4">Save limits</button>
+    </form>
+  </section>
+</div>
+{% endblock %}
