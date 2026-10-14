@@ -36,7 +36,7 @@ Categorization runs a cascade — your rules, built-in patterns, merchant memory
 
 ## Evals
 
-Run on a deterministic synthetic ledger (12 months, 742 transactions) with planted facts: a Netflix price increase, a duplicate charge, a forgotten subscription, a big one-off purchase, a travel month and a raise. Ground truth comes from SQL, not hand-written answers.
+Run on a deterministic synthetic ledger (12 months, 744 transactions) with planted facts: a Netflix price increase, a duplicate charge, a forgotten subscription, a big one-off purchase, a travel month and a raise. Ground truth comes from SQL, not hand-written answers.
 
 ```bash
 python -m evals.run checker      # free
@@ -50,7 +50,7 @@ python -m evals.run qa           # 20 questions, ~$1-2
 | Categorization | run `python -m evals.run categorize` |
 | Q&A (20 questions) | run `python -m evals.run qa` — accuracy, verified rate, steps and cost per question |
 
-Plus 100 tests (`pytest`), including 401(k) limit/paycheck/match maths and budget-plan invariants,, including network/passcode/CSRF tests and an offline end-to-end test,, including privacy tests (no names/phones/digits reach the model, local-only never calls the LLM, tokens only in the keychain),: SQL sandbox escapes, calculator injection, checker edge cases, CSV formats, categorization cascade, insights on planted facts, and the agent loop (including hallucination → rejection → fix) against a scripted model.
+Plus 100 tests (`pytest`) covering: SQL-sandbox escapes, calculator injection, number-checker edge cases, the privacy layer (no names, phone numbers or account digits reach the model; local-only mode never calls it; tokens live only in the Keychain), network/passcode/CSRF rules, 401(k) limit, paycheck and match maths, budget-plan invariants, CSV formats, insights on planted facts, the agent loop (hallucinated number → rejected → fixed) against a scripted model, and an offline end-to-end test in real Chromium.
 
 ## Run it
 
