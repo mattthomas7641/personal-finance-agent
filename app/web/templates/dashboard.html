@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="flex items-end justify-between gap-4 flex-wrap mb-5">
+  <div><h1 class="text-xl font-semibold">Overview</h1>
+    <form method="get"><select name="month" class="field !w-auto mt-1" onchange="this.form.submit()">
+      {% for m in months %}<option {% if m == month %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></form></div>
+  {% if uncategorized %}<a href="/transactions?category=Uncategorized" class="text-sm text-amber-700 underline">{{ uncategorized }} uncategorized</a>{% endif %}
+</div>
+
+<div class="card p-4 mb-4">{% include "_ask.html" %}
+  <div class="flex flex-wrap gap-2 mt-3 text-xs">
+    {% for q in ["What changed in my spending this month vs last?", "Which subscriptions am I paying for, and what do they cost per year?", "How much do I spend eating out per month on average?", "Am I on track with my budgets?"] %}
+      <form method="post" action="/ask"><input type="hidden" name="question" value="{{ q }}"><button class="pill hover:bg-zinc-200">{{ q }}</button></form>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="grid grid-cols-3 gap-3 mb-4">
+  <div class="card p-4"><div class="text-xs text-zinc-500">Spent {% if s.partial %}(so far){% endif %}</div><div class="text-2xl font-semibold num mt-1">{{ s.spend|money }}</div></div>
+  <div class="card p-4"><div class="text-xs text-zinc-500">Income</div><div class="text-2xl font-semibold num mt-1">{{ s.income|money }}</div></div>
+  <div class="card p-4"><div class="text-xs text-zinc-500">Net</div><div class="text-2xl font-semibold num mt-1 {{ 'text-emerald-700' if s.net >= 0 else 'text-red-700' }}">{{ s.net|money }}</div></div>
+</div>
+
+<div class="grid lg:grid-cols-5 gap-4">
+  <section class="lg:col-span-3 space-y-4">
+    <div class="card p-4">
+      <h2 class="font-semibold mb-3">Spending by category</h2>
+      {% set mx = (s.categories|map(attribute='spent')|max) if s.categories else 1 %}
+      {% for c in s.categories %}
+        <a href="/transactions?month={{ month }}&category={{ c.category|urlencode }}" class="block mb-2 group">
+          <div class="flex justify-between text-sm"><span class="group-hover:underline">{{ c.category }}</span>
+            <span class="num">{{ c.spent|money }}{% if c.budget %} <span class="text-zinc-400">/ {{ c.budget|money }}</span>{% endif %}</span></div>
+          <div class="h-2 rounded bg-zinc-100 mt-1 relative">
+            <div class="h-2 rounded {{ 'bg-red-500' if c.over else 'bg-zinc-800' }}" style="width: {{ (c.spent / mx * 100)|round }}%"></div>
+          </div>
+          {% if c.budget and s.partial and c.projected > c.budget and not c.over %}<div class="text-xs text-amber-700 mt-0.5">On pace for {{ c.projected|money }} this month</div>{% endif %}
+        </a>
+      {% endfor %}
+    </div>
+    <div class="card p-4"><h2 class="font-semibold mb-2">Monthly spending</h2><canvas id="trend" height="110"></canvas></div>
+  </section>
+
+  <section class="lg:col-span-2 space-y-4">
+    {% if ins.price_increases %}<div class="card p-4 !border-amber-300">
+      <h2 class="font-semibold mb-2">Price increases</h2>
+      {% for p in ins.price_increases %}<div class="text-sm">{{ p.merchant }}: {{ p.previous_amount|money }} → <b>{{ p.amount|money }}</b> <span class="text-zinc-500">since {{ p.price_changed_on }}</span></div>{% endfor %}
+    </div>{% endif %}
+    {% if ins.duplicates %}<div class="card p-4 !border-red-300">
+      <h2 class="font-semibold mb-2">Possible duplicate charges</h2>
+      {% for d in ins.duplicates %}<div class="text-sm">{{ d.merchant }} · {{ d.amount|money }} on {{ d.dates|join(' and ') }}</div>{% endfor %}
+    </div>{% endif %}
+    <div class="card p-4">
+      <h2 class="font-semibold mb-2">Recurring charges</h2>
+      {% for r in ins.subscriptions if r.active %}
+        <div class="flex justify-between text-sm py-0.5"><span>{{ r.merchant }} <span class="text-zinc-400">· {{ r.category }}</span></span><span class="num">{{ r.amount|money }}/mo</span></div>
+      {% else %}<p class="text-sm text-zinc-500">None detected yet (needs 3+ months).</p>{% endfor %}
+    </div>
+    {% if ins.unusual %}<div class="card p-4">
+      <h2 class="font-semibold mb-2">Unusually large charges</h2>
+      {% for u in ins.unusual[:5] %}<div class="text-sm">{{ u.date }} · {{ u.merchant }} · <b>{{ u.amount|money }}</b> <span class="text-zinc-500">(typical {{ u.category }}: {{ u.typical|money }})</span></div>{% endfor %}
+    </div>{% endif %}
+    {% if recent %}<div class="card p-4"><h2 class="font-semibold mb-2">Recent questions</h2>
+      {% for r in recent %}<a class="block text-sm underline truncate" href="/runs/{{ r.id }}">{{ r.question }}</a>{% endfor %}</div>{% endif %}
+  </section>
+</div>
+<script>
+new Chart(document.getElementById('trend'), {type: 'bar',
+  data: {labels: {{ trend|map(attribute=0)|list|tojson }}, datasets: [{data: {{ trend|map(attribute=1)|map('round', 2)|list|tojson }}, backgroundColor: '#27272a', borderRadius: 4}]},
+  options: {plugins: {legend: {display: false}}, scales: {y: {ticks: {callback: v => '$' + v.toLocaleString()}}}}});
+</script>
+{% endblock %}

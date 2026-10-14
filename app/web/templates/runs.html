@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-3">Questions</h1>
+<div class="card p-4 mb-4">{% include "_ask.html" %}</div>
+<div class="card overflow-hidden"><table class="w-full text-sm">
+  <thead class="bg-zinc-50 text-zinc-500 text-left"><tr><th class="px-3 py-2">Question</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Verified</th><th class="px-3 py-2 text-right">Steps</th><th class="px-3 py-2 text-right">Cost</th></tr></thead>
+  <tbody>{% for r in runs %}
+    <tr class="border-t border-zinc-100 hover:bg-zinc-50 cursor-pointer" onclick="location.href='/runs/{{ r.id }}'">
+      <td class="px-3 py-2">{{ r.question }}</td><td class="px-3 py-2">{{ r.status }}</td>
+      <td class="px-3 py-2">{{ "✓" if r.verified else ("—" if r.status != "done" else "⚠") }}</td>
+      <td class="px-3 py-2 text-right">{{ r.turns }}</td><td class="px-3 py-2 text-right num">${{ "%.3f"|format(r.cost_usd) }}</td></tr>
+  {% else %}<tr><td colspan="5" class="px-3 py-8 text-center text-zinc-500">No questions yet.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

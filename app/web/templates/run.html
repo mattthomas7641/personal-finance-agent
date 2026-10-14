@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ run.question[:60] }}{% endblock %}
+{% block content %}
+<a href="/runs" class="text-sm text-zinc-500 hover:text-zinc-800">← Questions</a>
+<h1 class="text-xl font-semibold mt-1 mb-4">{{ run.question }}</h1>
+
+{% if run.status != "running" %}
+  <div class="card p-5 mb-4 {{ '!border-emerald-300' if run.verified else ('!border-amber-300' if run.status == 'done' else '!border-red-300') }}">
+    <div class="text-xs font-medium mb-2 {{ 'text-emerald-700' if run.verified else 'text-amber-700' }}">
+      {% if run.verified %}✓ Verified: every number below came from a query or calculation on your data{% elif run.status == 'done' %}⚠ Some numbers couldn't be verified. Check the steps below.{% else %}{{ run.status }}{% endif %}
+      <span class="text-zinc-400 font-normal">· {{ run.turns }} steps · ${{ "%.3f"|format(run.cost_usd) }}</span></div>
+    <div class="pre leading-relaxed">{{ run.answer }}</div>
+    {% for c in charts %}<div class="mt-4"><div class="text-sm font-medium mb-1">{{ c.title }}</div><canvas id="chart{{ loop.index }}" height="100"></canvas></div>{% endfor %}
+  </div>
+  <div class="card p-4 mb-4">{% with parent=run.id, placeholder="Ask a follow-up…" %}{% include "_ask.html" %}{% endwith %}</div>
+{% else %}
+  <div class="text-sm text-blue-800 bg-blue-50 rounded-lg px-3 py-2 mb-4">Working… the page updates when the answer is ready.</div>
+{% endif %}
+
+<details {% if run.status == "running" %}open{% endif %} class="mb-6"><summary class="text-sm text-zinc-600 cursor-pointer mb-2">How the agent got this answer</summary>
+  <div id="trace" class="space-y-2"></div></details>
+
+<script>
+{% for c in charts %}
+new Chart(document.getElementById('chart{{ loop.index }}'), {type: {{ c.kind|tojson }},
+  data: {labels: {{ c.labels|tojson }}, datasets: [{data: {{ c["values"]|tojson }}, backgroundColor: '#27272a', borderColor: '#27272a', borderRadius: 4, tension: .25}]},
+  options: {plugins: {legend: {display: false}}}});
+{% endfor %}
+const es = new EventSource('/runs/{{ run.id }}/stream');
+es.addEventListener('step', e => document.getElementById('trace').insertAdjacentHTML('beforeend', e.data));
+es.addEventListener('end', () => { es.close(); {% if run.status == "running" %}location.reload();{% endif %} });
+</script>
+{% endblock %}

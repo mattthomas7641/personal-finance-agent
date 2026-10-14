@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Accounts</h1>
+<p class="text-sm text-zinc-600 mb-4">Everything stays on this computer in <span class="mono">data/ledger.db</span>. Bank logins happen inside Plaid's own window; this app never sees your bank password, and the Plaid access token is never shown to the AI.</p>
+{% if error %}<div class="mb-4 text-sm text-red-800 bg-red-50 rounded-lg p-3">{{ error }}</div>{% endif %}
+{% if not has_anthropic %}<div class="mb-4 text-sm text-amber-800 bg-amber-50 rounded-lg p-3">No <span class="mono">ANTHROPIC_API_KEY</span> in <span class="mono">.env</span>. Importing works, but AI categorization and questions won't until you add one.</div>{% endif %}
+
+<div class="grid md:grid-cols-2 gap-4">
+  <div class="card p-5 space-y-3">
+    <h2 class="font-semibold">Connect a bank with Plaid <span class="pill">{{ plaid_env }}</span></h2>
+    {% if not plaid_ready %}
+      <p class="text-sm text-zinc-600">Add <span class="mono">PLAID_CLIENT_ID</span> and <span class="mono">PLAID_SECRET</span> to <span class="mono">.env</span> (Plaid dashboard → Developers → Keys), then restart.</p>
+    {% else %}
+      {% if plaid_env == "sandbox" %}
+        <p class="text-sm text-zinc-600">Sandbox mode: fake banks with realistic data. Set <span class="mono">PLAID_ENV=production</span> (needs Plaid Production or trial access) to connect your real accounts.</p>
+        <form method="post" action="/connect/sandbox"><button class="btn btn-primary">Add a sandbox test bank</button></form>
+      {% endif %}
+      <button id="link" class="btn {{ 'btn-primary' if plaid_env != 'sandbox' }}">Connect {{ "a real" if plaid_env != "sandbox" else "via Plaid Link (sandbox)" }} bank</button>
+      {% if items %}<form method="post" action="/connect/sync"><button class="btn">Sync now</button></form>{% endif %}
+      <p class="text-xs text-zinc-500">Connected banks sync automatically every 6 hours while the app is running.</p>
+    {% endif %}
+  </div>
+
+  <form method="post" action="/connect/csv" enctype="multipart/form-data" class="card p-5 space-y-3">
+    <h2 class="font-semibold">Import a CSV export</h2>
+    <p class="text-sm text-zinc-600">Works with any bank or card: download "Activity" as CSV. Re-importing the same file won't duplicate rows.</p>
+    <input type="file" name="file" accept=".csv" required class="text-sm">
+    <input name="account" required class="field" placeholder="Account name, e.g. Chase Sapphire">
+    <select name="sign" class="field"><option value="auto">Detect whether purchases are negative or positive</option>
+      <option value="negative">Purchases are negative numbers</option><option value="positive">Purchases are positive numbers</option></select>
+    <button class="btn btn-primary">Import</button>
+  </form>
+</div>
+
+<div class="card p-5 mt-4">
+  <h2 class="font-semibold mb-2">Accounts</h2>
+  <table class="w-full text-sm"><tbody>
+  {% for a in accounts %}<tr class="border-t border-zinc-100"><td class="py-1.5">{{ a.name }}{% if a.mask %} ••{{ a.mask }}{% endif %}</td>
+    <td class="text-zinc-500">{{ a.type }}</td><td><span class="pill">{{ a.source }}</span></td><td class="text-right num">{{ counts.get(a.id, 0) }} transactions</td></tr>
+  {% else %}<tr><td class="text-zinc-500 py-2">No accounts yet.</td></tr>{% endfor %}
+  </tbody></table>
+  <div class="flex gap-2 mt-3">
+    <form method="post" action="/connect/demo"><button class="btn">Load demo data</button></form>
+    {% if accounts|selectattr("source", "equalto", "demo")|list %}<form method="post" action="/connect/remove_demo"><button class="btn">Remove demo data</button></form>{% endif %}
+    <form method="post" action="/connect/categorize"><button class="btn">Categorize uncategorized</button></form>
+  </div>
+</div>
+
+<script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+<script>
+document.getElementById('link')?.addEventListener('click', async () => {
+  const r = await fetch('/api/link_token', {method: 'POST'}).then(r => r.json());
+  if (r.error) { alert(r.error); return; }
+  Plaid.create({token: r.link_token,
+    onSuccess: async (public_token, meta) => {
+      const res = await fetch('/api/exchange', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({public_token, institution: meta.institution ? meta.institution.name : ''})}).then(r => r.json());
+      if (res.error) alert(res.error); else location.reload();
+    }}).open();
+});
+</script>
+{% endblock %}
