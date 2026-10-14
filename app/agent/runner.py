@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 import traceback
 from dataclasses import dataclass, field
 
@@ -176,13 +177,15 @@ class FinanceAgent:
         max_turns, max_cost = cfg.get("max_turns", 16), cfg.get("max_cost_usd", 0.5)
         effort, max_tokens = cfg.get("effort", "medium"), int(cfg.get("max_tokens", 8000))
         m = self.model or model("agent")
-        escalate = self.escalate_to if self.escalate_to is not None else (load_config().get("models") or {}).get("agent_escalate")
+        escalate = self.escalate_to if self.escalate_to is not None else model("agent_escalate")
         self.models_used = [m]
         messages: list[dict] = []
         for q, a in self.history[-4:]:
             messages += [{"role": "user", "content": q}, {"role": "assistant", "content": a}]
         messages.append({"role": "user", "content": self.question})
         spent, rejections = 0.0, 0
+        started = time.monotonic()
+        tok = {"input_tokens": 0, "cache_read_tokens": 0, "output_tokens": 0}
         self.step("question", self.question)
         record("question", self.question)
         try:
@@ -194,7 +197,11 @@ class FinanceAgent:
                     output_config={"effort": effort}, messages=cache_tail(messages),
                 )
                 spent += cost(m, resp.usage)
-                self.update(turns=turn, cost_usd=round(spent, 4), model=",".join(self.models_used))
+                tok["input_tokens"] += resp.usage.input_tokens + (getattr(resp.usage, "cache_creation_input_tokens", 0) or 0)
+                tok["cache_read_tokens"] += getattr(resp.usage, "cache_read_input_tokens", 0) or 0
+                tok["output_tokens"] += resp.usage.output_tokens
+                self.update(turns=turn, cost_usd=round(spent, 4), model=",".join(self.models_used),
+                            seconds=round(time.monotonic() - started, 1), **tok)
                 for b in resp.content:
                     if b.type == "thinking" and getattr(b, "thinking", ""):
                         self.step("thinking", b.thinking)

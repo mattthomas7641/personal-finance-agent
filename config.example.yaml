@@ -1,7 +1,8 @@
 # Copy to config.yaml to customize.
 models:
   categorize: claude-sonnet-5     # bulk, cheap
-  agent: claude-opus-5-5          # answers questions
+  agent: claude-haiku-5-5         # answers questions; 22/22 on the eval at ~$0.0006-0.006 per question
+  agent_escalate: claude-opus-5-5 # takes over if the number checker rejects an answer ("" to disable)
 agent:
   max_turns: 16
   max_cost_usd: 0.50     # per question

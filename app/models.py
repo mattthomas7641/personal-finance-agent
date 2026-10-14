@@ -160,6 +160,10 @@ class AgentRun(SQLModel, table=True):
     turns: int = 0
     cost_usd: float = 0.0
     model: str = ""  # model(s) that answered, e.g. "claude-haiku-5-5,claude-opus-5-5" after an escalation
+    input_tokens: int = 0       # uncached input
+    cache_read_tokens: int = 0  # input served from the prompt cache
+    output_tokens: int = 0
+    seconds: float = 0.0        # wall time, question to answer
     created_at: datetime = Field(default_factory=now)
 
 

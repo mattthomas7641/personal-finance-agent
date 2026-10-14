@@ -17,6 +17,7 @@ from plaid.exceptions import ApiException  # noqa: E402
 from sqlmodel import select  # noqa: E402
 
 from app import categorize, llm, main, security  # noqa: E402
+from app.web.routes import agent as agent_routes  # noqa: E402
 from app.agent import runner, tools  # noqa: E402
 from app.categorize import builtin_category  # noqa: E402
 from app.db import init_db, session  # noqa: E402
@@ -268,7 +269,7 @@ def test_prices_known_for_current_models():
 
 
 def test_daily_question_budget(monkeypatch):
-    monkeypatch.setattr(main, "load_config", lambda: {"agent": {"daily_cost_usd": 0.01}})
+    monkeypatch.setattr(agent_routes, "load_config", lambda: {"agent": {"daily_cost_usd": 0.01}})
     with session() as s:
         s.add(AgentRun(question="earlier", status="done", cost_usd=0.02))
         s.commit()
@@ -296,3 +297,23 @@ def test_daily_question_budget(monkeypatch):
 ])
 def test_builtin_rules_need_whole_words_and_the_right_sign(raw, amount, cat):
     assert builtin_category(raw, amount) == cat
+
+
+def test_run_trace_export(monkeypatch):
+    sql = "select round(sum(amount),2) as total from transactions where category='Travel' and month='2026-06'"
+    total = float(tools.run_sql(sql).split("\n")[1])
+    _, run = run_agent(Fake([[tool_use("a", "run_sql", {"query": sql})],
+                             [tool_use("b", "final_answer", {"answer": f"You spent ${total:,.2f} on travel in June 2026."})]]),
+                       monkeypatch)
+    with TestClient(main.app, client=MAC) as c:
+        t = c.get(f"/runs/{run.id}.json").json()
+        assert c.get(f"/runs/{run.id}").status_code == 200
+    assert t["verified"] and t["input_tokens"] == 1000 and t["output_tokens"] == 200
+    assert [s["kind"] for s in t["steps"]][:3] == ["question", "tool_call", "tool_result"]
+
+
+@pytest.mark.parametrize("payload", [b"Account Number,Symbol\x00\x00,Current Value\n\x00\"unterminated,1\n", b"\xff\xfe\x00garbage", b""])
+def test_malformed_fidelity_file_gives_a_message_not_a_crash(payload):
+    with TestClient(main.app, client=MAC, follow_redirects=False) as c:
+        r = c.post("/retirement/import-fidelity", files={"file": ("Portfolio_Positions.csv", payload, "text/csv")})
+    assert r.status_code == 303 and "error=" in r.headers["location"]

@@ -1,27 +1,42 @@
 # Northstar (Personal Finance Agent)
 
-A personal finance agent you can actually trust with numbers, built to keep you pointed at your goals. Connect your banks (Plaid) or import CSVs, then ask questions in plain English — *"Why was my spending higher last month?"*, *"What am I paying for subscriptions per year?"* — and get answers where **every number is verified against your data before you see it**.
+[![CI](https://github.com/mattthomas7641/personal-finance-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/mattthomas7641/personal-finance-agent/actions/workflows/ci.yml)
 
-LLMs are bad at arithmetic and happy to make up figures. This agent can't: it answers by running read-only SQL and a calculator, and a deterministic **number checker** rejects any answer containing a figure that didn't come from a tool result. Rejected answers go back to the agent to fix.
+A local-first personal finance agent for my own bank data. Connect banks (Plaid) or import CSVs, then ask questions in plain English, such as *"Why was my spending higher last month?"* or *"Am I on track to retire at 40?"*. **Every number in an answer must trace back to a query or calculation on your data**, or the answer is sent back to be fixed.
 
+LLMs are bad at arithmetic and happy to make up figures. Here the model answers by running read-only SQL and a calculator, and a deterministic **number checker** rejects any answer with a figure that didn't come from a tool result. The checker proves traceability, not correctness, so the evals below measure correctness separately.
+
+```mermaid
+flowchart LR
+  subgraph Mac["Your Mac (all data stays here)"]
+    direction LR
+    P[Plaid sync] --> DB[(SQLite ledger)]
+    C[CSV / Fidelity import] --> DB
+    DB --> CAT["Categorization cascade<br/>rules → built-ins → memory → Plaid → LLM"]
+    DB --> V[["transactions view<br/>(read-only, authorizer)"]]
+    subgraph Agent["Agent loop"]
+      M{{"Claude<br/>Haiku → Opus on rejection"}} -->|tool calls| T["run_sql · calculate · get_plan · get_goals · chart"]
+      T --> M
+      M -->|final_answer| K["Number checker"]
+      K -->|unsupported number| M
+    end
+    V --> T
+    K -->|verified| UI[Web UI + phone PWA]
+  end
+  M <-. "redacted text only<br/>(logged on Privacy page)" .-> API[(Anthropic API)]
+  Phone[iPhone] -. "Tailscale HTTPS + passcode" .-> UI
 ```
- Plaid (sandbox/prod) ─┐                       ┌──────────── agent loop (Claude) ────────────┐
- CSV exports ──────────┼─► transactions ──────►│ get_schema · run_sql (read-only sandbox)     │
- demo ledger ──────────┘      │                │ calculate (safe AST) · get_insights · chart  │
-                              ▼                │ final_answer ──► NUMBER CHECKER ──► user     │
-              categorization cascade           │                    │ unsupported numbers?    │
-   your rules → built-ins → memory → Plaid → LLM│                    └──► rejected, retry      │
-                              │                └──────────────────────────────────────────────┘
-                              ▼
-     deterministic insights: subscriptions & price hikes · duplicates · unusual charges · budgets
-```
+
+More detail: [architecture and design decisions](docs/ARCHITECTURE.md) · [threat model](docs/THREAT_MODEL.md) · [security policy](SECURITY.md).
 
 ## What makes it trustworthy
 
 | | |
 |---|---|
-| **Number checker** | Every figure in an answer must match (at its stated precision, incl. `$1.2k`, `%`) a SQL or calculator result from that run. Dates and years aren't treated as claims. Unverifiable answers are rejected and retried, and labeled if they still fail. |
-| **SQL sandbox** | The agent's connection is opened read-only, and a SQLite authorizer only allows reading the `transactions` view: no writes, no `ATTACH`/`PRAGMA`, and no access to the table holding Plaid tokens — even via CTEs. |
+| **Number checker** | Every figure in an answer must match (at its stated precision, incl. `$1.2k`, `%`) a SQL or calculator result from that run. Dates in answers aren't claims, and dates or column names in tool results aren't evidence, so a wrong small count is still caught. Unverifiable answers are rejected and retried, and labeled if they still fail. |
+| **SQL sandbox** | The agent's connection is opened read-only, and a SQLite authorizer only allows reading the `transactions` view: no writes, no `ATTACH`/`PRAGMA`, and no access to the table holding Plaid tokens, even via CTEs. Queries are stopped after 3 seconds and run off the web server's event loop. |
+| **Prompt injection** | Transaction descriptions are untrusted input. The agent treats tool results as data, its tools are read-only, and an eval plants instruction-like charges to check answers stay correct. |
+| **Failure isolation** | One bank needing a re-login, a Plaid outage, a Claude API error, a failed categorization batch or a malformed file affects only that piece. Each case has a test. |
 | **Safe calculator** | AST-based arithmetic only; no names, imports or attribute access. |
 | **No double counting** | Built-in rules treat credit-card payments, transfers and investment moves as transfers, so paying your card isn't counted as spending twice. |
 | **Corrections stick** | Fix a category once and a rule re-labels every matching transaction and applies before the AI ever sees it again. |
@@ -32,33 +47,51 @@ LLMs are bad at arithmetic and happy to make up figures. This agent can't: it an
 
 ## Cost-aware design
 
-Categorization runs a cascade — your rules, built-in patterns, merchant memory, Plaid's own category — and only sends the remaining **unique descriptors** to Claude Sonnet in batches of 80. A year of transactions is typically one or two calls. Questions use Claude Opus 5.5 with a hard per-question budget.
+- **Categorization** runs a cascade: your rules, built-in patterns, merchant memory, then Plaid's own category. Only the remaining **unique descriptors** go to Claude, in batches of 80, so a year of transactions is one or two calls (about 2¢ per 1,000 transactions).
+- **Questions** start on Claude Haiku 5.5. If the number checker rejects an answer, the run switches to Opus 5.5. The checker is what makes a cheap model safe to try first. On the eval this is 100% verified at **$0.0064 per question, 70% less than Opus alone**.
+- **Prompt caching** covers the whole conversation, not just the system prompt, so each step re-reads earlier tool results at 5–10% of the input price. Planning tool output is trimmed for the model.
+- **Guardrails:** a per-question budget, a daily budget (`agent.daily_cost_usd`), and tokens, cost, time and model recorded for every question.
 
 ## Evals
 
 Run on a deterministic synthetic ledger (12 months, 744 transactions) with planted facts: a Netflix price increase, a duplicate charge, a forgotten subscription, a big one-off purchase, a travel month and a raise. Ground truth comes from SQL, not hand-written answers.
 
 ```bash
-python -m evals.run checker      # free
-python -m evals.run categorize   # ~$0.02
-python -m evals.run qa           # 20 questions, ~$1-2
+python -m evals.run checker                     # free, runs in CI
+python -m evals.run categorize                  # ~$0.02
+python -m evals.run qa --model claude-haiku-5-5 --escalate claude-opus-5-5
+python -m evals.run injection                   # planted instructions in descriptions
+python -m evals.run report                      # regenerates the tables below
 ```
 
-| Suite | Result |
-|---|---|
-| Number checker | **7/7** planted hallucinated numbers caught, **0/5** false positives |
-| Categorization (Claude Sonnet 5) | **96%** of 744 transactions (95% of 40 unique descriptors the LLM had to label) for **$0.015** total |
-| Q&A agent (Claude Opus 5.5, 20 questions) | **20/20 correct**, **20/20 verified** by the number checker, 4.4 steps and **$0.033** per question |
+The Q&A set is 22 questions: 20 with SQL-computed answers, scored on the **headline** figure so a long answer can't pass by listing many numbers, plus 2 the data can't answer, where the right answer says so.
 
-Plus 164 tests (`pytest`) covering: Fidelity positions import, Plaid update mode (re-login flagged per bank, others keep syncing), every page rendering, Roth phase-out and FI/Coast FIRE maths, SQL-sandbox escapes, calculator injection, number-checker edge cases, the privacy layer (no names, phone numbers or account digits reach the model; local-only mode never calls it; tokens live only in the Keychain), network/passcode/CSRF rules, 401(k) limit, paycheck and match maths, budget-plan invariants, CSV formats, insights on planted facts, the agent loop (hallucinated number → rejected → fixed) against a scripted model, and an offline end-to-end test in real Chromium.
+<!-- scoreboard:start -->
+| Eval | Result |
+|---|---|
+| Number checker catches planted numbers | 10/10 caught, 0/5 false positives |
+| Categorization accuracy (per transaction) | 96% at $0.0198 per 1,000 transactions |
+| Prompt injection via transaction descriptions | 2/2 answers unaffected by 5 planted instructions |
+
+| Agent model | Correct | Verified | Steps | Cost / question |
+|---|---|---|---|---|
+| haiku-5-5 | 100% (22 q) | 96% | 4.2 | $0.0006 |
+| haiku-5-5 → opus-5-5 | 100% (22 q) | 100% | 4.3 | $0.0064 |
+| sonnet-5-5 | 100% (22 q) | 100% | 3.8 | $0.0092 |
+| opus-5-5 | 100% (22 q) | 100% | 4.0 | $0.0213 |
+<!-- scoreboard:end -->
+
+Plus 220+ tests (`pytest`, run in CI with `pip-audit` and `bandit`) covering: Fidelity positions import, Plaid update mode (re-login flagged per bank, others keep syncing), every page rendering, Roth phase-out and FI/Coast FIRE maths, SQL-sandbox escapes, calculator injection, number-checker edge cases, the privacy layer (no names, phone numbers or account digits reach the model; local-only mode never calls it; tokens live only in the Keychain), network/passcode/CSRF rules, 401(k) limit, paycheck and match maths, budget-plan invariants, CSV formats, insights on planted facts, the agent loop (hallucinated number → rejected → fixed, escalation to a stronger model) against a scripted model, failure injection (Plaid outage, Claude API errors, scheduler failure, runaway SQL, malformed uploads), cross-site and proxy rules, and an offline end-to-end test in real Chromium.
 
 ## Run it
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+python3 -m venv .venv && .venv/bin/pip install -r requirements.lock && .venv/bin/pip install -e . --no-deps
 cp .env.example .env    # add ANTHROPIC_API_KEY, PLAID_CLIENT_ID, PLAID_SECRET
 .venv/bin/uvicorn app.main:app --port 8766
 ```
+
+**Demo without any real data:** `scripts/demo.sh` starts the app on port 8767 with a synthetic 12-month ledger in a temporary folder. Screenshots and recordings should only ever come from this.
 
 Open http://localhost:8766 → **Accounts**:
 - **Sandbox** (`PLAID_ENV=sandbox`): *Add a sandbox test bank* for realistic fake data.
@@ -99,8 +132,11 @@ See [SECURITY.md](SECURITY.md) and the [privacy policy](https://mattthomas7641.g
 
 ```
 app/
-  ingest/   sources.py (Plaid, CSV, demo)  demo.py (synthetic ledger + planted facts)
-  agent/    runner.py (loop + verification gate)  tools.py (sql, calculator, charts)  checker.py
-  categorize.py  insights.py  main.py (FastAPI)  web/templates/
-evals/run.py  tests/
+  main.py        startup, scheduled sync, access guard
+  agent/         runner.py (loop, verification gate, model escalation, caching)  tools.py  checker.py
+  ingest/        sources.py (Plaid, CSV)  brokerage.py (Fidelity)  demo.py (synthetic ledger + planted facts)
+  web/routes/    overview · agent · accounts · planning · access   web/templates/
+  categorize.py  insights.py  planning.py  retirement.py  fire.py  cash.py  privacy.py  security.py  llm.py
+evals/run.py     evals/results.json  evals/SCOREBOARD.md
+tests/           .github/workflows/ci.yml  docs/
 ```
