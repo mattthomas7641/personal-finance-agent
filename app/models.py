@@ -51,6 +51,7 @@ class Txn(SQLModel, table=True):
     plaid_category: str = ""  # Plaid personal_finance_category mapped to our taxonomy, if any
     pending: bool = False
     source: str = "csv"
+    tag: str = ""  # "" | one_off | bad_investment: kept in monthly totals, left out of the averages plans use
 
 
 class Rule(SQLModel, table=True):
@@ -178,11 +179,17 @@ class AgentStep(SQLModel, table=True):
 
 
 class SubscriptionDecision(SQLModel, table=True):
-    """What you decided about a recurring charge. 'cancelled' + a later charge = an alert."""
-    key: str = Field(primary_key=True)  # normalized descriptor
-    status: str = "review"              # keep | review | cancelled
+    """What you decided about a recurring charge, or a subscription you added yourself.
+    'cancelled' + a later charge = an alert; cancelled charges drop out of the averages plans use."""
+    key: str = Field(primary_key=True)  # normalized descriptor, or "manual:<MATCH>" for ones you added
+    status: str = "review"              # keep | review | cancelled | ignore (not a subscription)
     decided_on: dt.date = Field(default_factory=lambda: dt.date.today())
     note: str = ""
+    manual: bool = False                # added by you because detection missed it
+    name: str = ""
+    match: str = ""                     # transactions whose description or merchant contains this
+    cadence: str = ""                   # weekly | biweekly | monthly | quarterly | yearly | usage
+    amount: Optional[float] = None      # optional fixed price; otherwise taken from the charges
 
 
 class BalanceSnapshot(SQLModel, table=True):

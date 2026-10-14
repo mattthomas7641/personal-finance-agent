@@ -21,48 +21,67 @@ def _txns(since: date | None = None) -> list[Txn]:
         return s.exec(q.order_by(Txn.date)).all()
 
 
+# Billing cycles: (name, min gap, max gap, charges a year, charges needed to call it recurring)
+CADENCES = [("weekly", 5, 9, 52, 3), ("every 2 weeks", 12, 18, 26, 3), ("monthly", 24, 37, 12, 3),
+            ("quarterly", 80, 100, 4, 2), ("yearly", 350, 380, 1, 2)]
+NOT_SUBSCRIPTIONS = ("Groceries", "Dining", "Coffee", "Transport")  # regular habits, not bills
+
+
+def cadence_of(gaps: list[int]) -> tuple | None:
+    """The billing cycle that fits the recent gaps between charges, if any does."""
+    recent = gaps[-3:]
+    for c in CADENCES:
+        if all(c[1] <= g <= c[2] for g in recent):
+            return c
+    return None
+
+
 def recurring(txns: list[Txn] | None = None) -> list[dict]:
-    """Charges from the same merchant roughly every month (26-35 days apart), 3+ times.
-    Reports current price, previous price (if it changed), and when it last charged."""
+    """Charges that repeat on a regular cycle (weekly, every 2 weeks, monthly, quarterly or yearly).
+    Fixed prices report price changes; usage-based bills (amounts that vary) report their average."""
     txns = txns if txns is not None else _txns()
     by_key: dict[str, list[Txn]] = defaultdict(list)
     for t in txns:
-        if t.amount > 0 and t.category not in NON_SPEND and t.category not in ("Groceries", "Dining", "Coffee", "Transport"):
+        if (t.amount > 0 and not t.pending and t.category not in NON_SPEND and t.category not in NOT_SUBSCRIPTIONS
+                and not getattr(t, "tag", "")):
             by_key[normalize(t.raw_name)].append(t)
     out = []
     latest = max((t.date for t in txns), default=date.today())
     for key, ts in by_key.items():
         ts.sort(key=lambda t: t.date)
-        if len(ts) < 3:
-            continue
         gaps = [(b.date - a.date).days for a, b in zip(ts, ts[1:])]
-        if not all(24 <= g <= 37 for g in gaps[-3:]):
+        cyc = cadence_of(gaps) if gaps else None
+        if not cyc or len(ts) < cyc[4]:
             continue
+        name, lo, hi, per_year, _ = cyc
         amounts = [round(t.amount, 2) for t in ts]
         cur = amounts[-1]
+        recent = amounts[-3:]
+        variable = max(recent) > min(recent) * 1.15 + 0.5  # usage-based (cloud, utilities-like)
         # A price change = a stable old price (2+ charges) followed by a stable new price (2+ charges).
-        # Variable bills (utilities) never qualify, so they aren't reported as "price increases".
         prev, changed_on = None, None
-        for i in range(2, len(amounts) - 1):
-            if (amounts[i] == amounts[i + 1] == cur and amounts[i - 1] == amounts[i - 2] != cur
-                    and all(a == cur for a in amounts[i:])):
-                prev, changed_on = amounts[i - 1], ts[i].date
-                break
-        cadence = round(sum(gaps[-3:]) / len(gaps[-3:]))
+        if not variable:
+            for i in range(2, len(amounts) - 1):
+                if (amounts[i] == amounts[i + 1] == cur and amounts[i - 1] == amounts[i - 2] != cur
+                        and all(a == cur for a in amounts[i:])):
+                    prev, changed_on = amounts[i - 1], ts[i].date
+                    break
+        typical = round(sum(recent) / len(recent), 2) if variable else cur
+        step = round(sum(gaps[-3:]) / len(gaps[-3:]))
         history, last_amt = [], None
         for t in ts:  # each distinct price and when it started
             if round(t.amount, 2) != last_amt:
                 history.append({"amount": round(t.amount, 2), "since": t.date.isoformat()})
                 last_amt = round(t.amount, 2)
         out.append({
-            "key": key, "cadence_days": cadence, "history": history,
-            "next_expected": (ts[-1].date + timedelta(days=cadence)).isoformat(),
-            "merchant": ts[-1].merchant or key.title(), "category": ts[-1].category, "amount": round(cur, 2),
+            "key": key, "cadence": name, "cadence_days": step, "per_year": per_year, "variable": variable,
+            "history": history[-6:], "next_expected": (ts[-1].date + timedelta(days=step)).isoformat(),
+            "merchant": ts[-1].merchant or key.title(), "category": ts[-1].category, "amount": typical,
             "previous_amount": round(prev, 2) if prev is not None else None,
             "price_changed_on": changed_on.isoformat() if changed_on else None,
-            "annual_cost": round(cur * 12, 2), "charges": len(ts), "last_charged": ts[-1].date.isoformat(),
+            "annual_cost": round(typical * per_year, 2), "charges": len(ts), "last_charged": ts[-1].date.isoformat(),
             "first_charged": ts[0].date.isoformat(),
-            "active": (latest - ts[-1].date).days <= 40,
+            "active": (latest - ts[-1].date).days <= hi * 1.5 + 5,
         })
     return sorted(out, key=lambda r: -r["annual_cost"])
 
@@ -98,7 +117,7 @@ def unusual(txns: list[Txn] | None = None, z: float = 3.5, min_amount: float = 1
             stats[c] = (med, mad)
     out = []
     for t in txns:
-        if t.category in stats and t.amount >= min_amount:
+        if t.category in stats and t.amount >= min_amount and not t.tag:
             med, mad = stats[t.category]
             score = 0.6745 * (t.amount - med) / mad
             if score >= z:
@@ -173,6 +192,6 @@ def alerts(ins: dict | None = None) -> list[dict]:
         out.append({"key": f"dup:{':'.join(d['ids'])}", "tone": "bad", "kind": "Possible duplicate", "merchant": d["merchant"],
                     "text": f"${d['amount']:,.2f} on {' and '.join(d['dates'])}"})
     for u in ins["unusual"][:5]:
-        out.append({"key": f"big:{u['id']}", "tone": "info", "kind": "Large charge",
+        out.append({"key": f"big:{u['id']}", "txn_id": u["id"], "tone": "info", "kind": "Large charge",
                     "merchant": u["merchant"], "text": f"${u['amount']:,.2f} on {u['date']} (usual {u['category']}: ${u['typical']:,.2f})"})
     return [a for a in out if a["key"] not in gone]

@@ -97,9 +97,10 @@ def schema() -> str:
     finally:
         conn.close()
     return f"""Table `transactions` (read-only):
-  id TEXT, date TEXT 'YYYY-MM-DD', month TEXT 'YYYY-MM', amount REAL, merchant TEXT, description TEXT (raw bank text),
-  category TEXT, pending INTEGER, account TEXT, account_type TEXT
+  date TEXT 'YYYY-MM-DD', month TEXT 'YYYY-MM', amount REAL, merchant TEXT, description TEXT (raw bank text),
+  category TEXT, tag TEXT ('' | 'one_off' | 'bad_investment', set by the user), pending INTEGER, account TEXT, account_type TEXT
 Sign convention: amount > 0 = money out (spending), amount < 0 = money in (income, refunds).
+Tagged one-offs and bad investments are real spending, but leave them out of "typical" or average monthly spending.
 Categories: {", ".join(CATEGORIES)}. Exclude {sorted(NON_SPEND)} when computing "spending".
 Data covers {lo} to {hi} ({n} transactions). Accounts: {", ".join(redact(a) for a in accts if a)}.
 Text fields are privacy-redacted: [person], [phone], [acct], [email] and # replace personal details.

@@ -1,6 +1,7 @@
 """Overview, transactions, subscriptions and category rules."""
 from __future__ import annotations
 
+import datetime as dt
 from collections import defaultdict
 
 from fastapi import APIRouter, Form, Request
@@ -47,12 +48,16 @@ def dashboard(request: Request, month: str = ""):
     except Exception:
         goals_ov, fp, register = None, None, []
     nw = fire.snapshot()
+    with session() as s:
+        year_start = dt.date(dt.date.today().year, 1, 1)
+        tagged = s.exec(select(Txn.tag, func.sum(Txn.amount)).where(Txn.tag != "", Txn.date >= year_start).group_by(Txn.tag)).all()
     budget_total = sum(c["budget"] for c in summary["categories"] if c["budget"])
     budget_spent = sum(c["spent"] for c in summary["categories"] if c["budget"])
     return render(request, "dashboard.html", month=month, months=months, s=summary, prev=prev, ins=ins, attention=attention,
                   cash=cash.summary(), trend=trend_items, uncategorized=uncategorized, gov=goals_ov, fp=fp,
                   register=register, nw=nw, history=fire.history(), alerts=insights.alerts(ins), digest=digest,
-                  subs=subscriptions.overview(), budget_total=budget_total, budget_spent=budget_spent)
+                  subs=subscriptions.overview(), budget_total=budget_total, budget_spent=budget_spent,
+                  tagged={k: round(v, 2) for k, v in tagged})
 
 
 @router.post("/alerts/dismiss")
@@ -73,7 +78,8 @@ def status(request: Request):
 # ---------------- transactions ----------------
 
 @router.get("/transactions", response_class=HTMLResponse)
-def transactions(request: Request, month: str = "", category: str = "", q: str = "", source: str = "", page: int = 1):
+def transactions(request: Request, month: str = "", category: str = "", q: str = "", source: str = "", tag: str = "",
+                 page: int = 1):
     per_page = 200
     page = max(1, page)
     with session() as s:
@@ -86,6 +92,8 @@ def transactions(request: Request, month: str = "", category: str = "", q: str =
             stmt = stmt.where(Txn.raw_name.ilike(f"%{q}%") | Txn.merchant.ilike(f"%{q}%"))
         if source:
             stmt = stmt.where(Txn.category_source == source)
+        if tag:
+            stmt = stmt.where(Txn.tag == tag) if tag != "any" else stmt.where(Txn.tag != "")
         everything = s.exec(stmt.order_by(Txn.date.desc())).all()
     count = len(everything)
     rows = everything[(page - 1) * per_page: page * per_page]
@@ -98,8 +106,31 @@ def transactions(request: Request, month: str = "", category: str = "", q: str =
         summary = {"count": len(spend), "total": total, "avg": round(total / len(spend), 2),
                    "per_month": round(total / n_months, 2), "since": first.isoformat()}
     return render(request, "transactions.html", rows=rows, categories=CATEGORIES, months=insights.months(),
-                  f={"month": month, "category": category, "q": q, "source": source}, total=total, count=count,
+                  f={"month": month, "category": category, "q": q, "source": source, "tag": tag}, total=total, count=count,
                   page=page, pages=max(1, -(-count // per_page)), summary=summary)
+
+
+TAGS = {"": "", "one_off": "One-off", "bad_investment": "Bad investment"}
+
+
+@router.post("/txn/{txn_id}/tag", response_class=HTMLResponse)
+def txn_tag(txn_id: str, tag: str = Form(""), from_alert: str = Form("")):
+    """Mark a charge as a one-off or a bad investment (or clear it). It stays in that month's spending but
+    drops out of the averages plans and budgets use."""
+    if tag not in TAGS:
+        return HTMLResponse("", status_code=400)
+    with session() as s:
+        t = s.get(Txn, txn_id)
+        if not t:
+            return HTMLResponse("", status_code=404)
+        t.tag = tag
+        s.add(t)
+        if from_alert:
+            s.merge(Dismissal(key=f"big:{txn_id}"))
+        s.commit()
+    if from_alert:
+        return HTMLResponse("")
+    return HTMLResponse(f'<span class="badge plain t-ok">{TAGS[tag] or "Untagged"}</span>')
 
 
 @router.post("/txn/{txn_id}/category", response_class=HTMLResponse)
@@ -130,8 +161,23 @@ def rule_delete(rid: int):
 # ---------------- subscriptions ----------------
 
 @router.get("/subscriptions", response_class=HTMLResponse)
-def subscriptions_page(request: Request, saved: str = ""):
-    return render(request, "subscriptions.html", subs=subscriptions.overview(), saved=saved)
+def subscriptions_page(request: Request, saved: str = "", error: str = "", match: str = ""):
+    with session() as s:
+        merchants = sorted({m for m in s.exec(select(Txn.merchant).where(Txn.amount > 0)).all() if m})
+    return render(request, "subscriptions.html", subs=subscriptions.overview(), saved=saved, error=error,
+                  merchants=merchants, prefill=match)
+
+
+@router.post("/subscriptions/add")
+def subscription_add(name: str = Form(""), match: str = Form(...), cadence: str = Form("monthly"), amount: str = Form("")):
+    from urllib.parse import quote
+
+    from app.web.common import _num
+    try:
+        subscriptions.add_manual(name, match, cadence, _num(amount) if amount.strip() else None)
+    except ValueError as e:
+        return back(f"/subscriptions?error={quote(str(e))}")
+    return back("/subscriptions?saved=1")
 
 
 @router.post("/subscriptions/status")

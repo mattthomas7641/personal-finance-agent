@@ -2,8 +2,10 @@
 {% from "_ui.html" import page_header, badge, alert, saved_toast %}
 {% block title %}Subscriptions · Northstar{% endblock %}
 {% block content %}
-{% call page_header("Subscriptions", "Every recurring charge, what it costs a year, and what you've decided to do about it.") %}{{ saved_toast(saved) }}{% endcall %}
+{% call page_header("Subscriptions", "Every recurring charge, what it costs a year, and what you've decided to do about it.") %}{{ saved_toast(saved) }}
+  <a href="#add" class="btn">Add one it missed</a>{% endcall %}
 
+{% if error %}{% call alert("bad", "mb-3") %}{{ error }}{% endcall %}{% endif %}
 {% for a in subs.alerts %}
   {% call alert("bad", "mb-3") %}<b>{{ a.merchant }}</b> charged {{ a.amount|money }} on {{ a.date }}, after you marked it cancelled on {{ a.cancelled_on }}. Check that the cancellation went through, or dispute the charge.{% endcall %}
 {% endfor %}
@@ -29,20 +31,36 @@
       <tr class="{{ 'opacity-60' if i.status == 'cancelled' and 'Charged after cancel' not in i.flags }}">
         <td><a href="/transactions?q={{ i.merchant|urlencode }}" class="font-medium">{{ i.merchant }}</a>
           {% for f in i.flags %} {{ badge(f, "bad" if f == "Charged after cancel" else "warn") }}{% endfor %}
-          <div class="hint">{{ i.category }} · every {{ i.cadence_days }} days · since {{ i.first_charged }}</div></td>
-        <td class="r">{{ i.amount|money }}</td>
+          <div class="hint">{{ i.cadence|capitalize }}{% if i.category %} · {{ i.category }}{% endif %}{% if i.charges %} · {{ i.charges }} charge{{ "s" if i.charges != 1 }} since {{ i.first_charged }}{% endif %}{% if i.manual %} · added by you{% endif %}</div></td>
+        <td class="r whitespace-nowrap">{{ "~" if i.variable }}{{ i.amount|money }}</td>
         <td class="r hidden sm:table-cell">{{ i.annual|money0 }}</td>
         <td class="hidden md:table-cell text-[13px] whitespace-nowrap">{{ i.next_expected if i.status != "cancelled" else "—" }}</td>
         <td class="hidden lg:table-cell text-[13px] c-muted">{% for h in i.history[-3:] %}{{ h.amount|money }}{% if not loop.last %} → {% endif %}{% endfor %}</td>
         <td class="r"><form method="post" action="/subscriptions/status" class="inline-flex">
           <input type="hidden" name="key" value="{{ i.key }}">
           <select name="status" class="field !w-auto !h-8 text-[13px]" aria-label="Decision for {{ i.merchant }}" onchange="this.form.submit()">
-            {% for v, l in [("review", "To review"), ("keep", "Keep"), ("cancelled", "Cancelled")] %}<option value="{{ v }}" {% if i.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+            {% for v, l in [("review", "To review"), ("keep", "Keep"), ("cancelled", "Cancelled"), ("ignore", "Remove" if i.manual else "Not a subscription")] %}<option value="{{ v }}" {% if i.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
           </select></form></td>
       </tr>
     {% else %}<tr><td colspan="6" class="c-muted text-center py-8">No subscriptions found yet. This needs about 3 months of history.</td></tr>{% endfor %}
     </tbody>
   </table></div>
-  <div class="panel-f">Mark something Cancelled once you've cancelled it. If it charges you again, Northstar flags it here and on Overview.</div>
+  <div class="panel-f">Mark something Cancelled once you've cancelled it. Its past charges stop counting in your plan's
+    spending averages, and if it charges you again, Northstar flags it here and on Overview.</div>
+</section>
+
+<section id="add" class="panel mt-6 scroll-mt-20">
+  <div class="panel-h"><h2>Add one it missed</h2><span class="meta">Usage bills like Google Cloud or AWS, or anything with one charge so far</span></div>
+  <form method="post" action="/subscriptions/add" class="panel-b grid grid-cols-2 sm:grid-cols-5 gap-3 items-end">
+    <label class="lbl col-span-2">Shows up as <span class="font-normal c-muted">(text in the charge)</span>
+      <input name="match" required class="field" list="merchants" placeholder="GOOGLE CLOUD" value="{{ prefill }}"></label>
+    <datalist id="merchants">{% for m in merchants %}<option value="{{ m }}">{% endfor %}</datalist>
+    <label class="lbl">Name <span class="font-normal c-muted">(optional)</span><input name="name" class="field" placeholder="Google Cloud"></label>
+    <label class="lbl">Bills<select name="cadence" class="field">
+      {% for v, l in [("monthly", "Monthly"), ("usage", "Monthly, amount varies"), ("biweekly", "Every 2 weeks"), ("weekly", "Weekly"), ("quarterly", "Quarterly"), ("yearly", "Yearly")] %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></label>
+    <label class="lbl">Price <span class="font-normal c-muted">(optional)</span><input name="amount" class="field" inputmode="decimal" placeholder="From charges"></label>
+    <div class="col-span-2 sm:col-span-5"><button class="btn btn-primary">Add subscription</button>
+      <span class="hint ml-2">Without a price, Northstar uses the latest charge (or the 3-month average for amounts that vary).</span></div>
+  </form>
 </section>
 {% endblock %}
