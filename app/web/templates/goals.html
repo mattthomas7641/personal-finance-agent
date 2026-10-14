@@ -154,7 +154,7 @@
       {% endfor %}
       </tbody>
     </table></div>
-    <div class="panel-f flex flex-wrap items-center justify-between gap-2">{% set CF = cf %}<span>{% set lo = (CF.left_out if CF and CF.left_out else {}) %}{% if lo %}<span>Spending averages leave out {% for k, v in lo.items() %}{{ v|money0 }}/mo of {{ {"cancelled": "cancelled subscriptions", "one_off": "one-offs", "bad_investment": "bad investments"}.get(k, k) }}{{ ", " if not loop.last }}{% endfor %}.</span> {% endif %} Leave blank for no limit. <a class="link" href="/plan#cuts">Suggested limits for your retirement target</a> are on Plan.</span>
+    <div class="panel-f flex flex-wrap items-center justify-between gap-2">{% set CF = cf %}<span>{% set lo = (CF.left_out if CF and CF.left_out else {}) %}{% if CF and CF.off_ledger %}<span class="hint">Spending includes {{ CF.off_ledger|money0 }}/mo of subscriptions on cards that aren't connected. </span>{% endif %}{% if lo %}<span>Spending averages leave out {% for k, v in lo.items() %}{{ v|money0 }}/mo of {{ {"cancelled": "cancelled subscriptions", "one_off": "one-offs", "bad_investment": "bad investments"}.get(k, k) }}{{ ", " if not loop.last }}{% endfor %}.</span> {% endif %} Leave blank for no limit. <a class="link" href="/plan#cuts">Suggested limits for your retirement target</a> are on Plan.</span>
       <button class="btn btn-primary btn-sm">Save limits</button></div>
   </form>
 </section>

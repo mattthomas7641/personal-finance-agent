@@ -89,6 +89,16 @@ def belongs_to_cancelled(txns: list[Txn]) -> set[str]:
     return out
 
 
+def off_ledger_monthly() -> float:
+    """Monthly cost of subscriptions you added by hand that bill somewhere Northstar can't see (a card that
+    isn't connected): no matching charges at all. Plans add this to your spending so they aren't too rosy."""
+    total = 0.0
+    for d in decisions().values():
+        if d.manual and d.status != "cancelled" and d.amount and not _charges(d.match):
+            total += d.amount * CYCLES[d.cadence][1] / 12
+    return round(total, 2)
+
+
 def _charged_after(key: str, day: date, match: str = "") -> list[Txn]:
     from app.categorize import normalize
 
@@ -120,7 +130,8 @@ def _manual_item(d: SubscriptionDecision, today: date) -> dict:
             "first_charged": charges[0].date.isoformat() if charges else today.isoformat(),
             "last_charged": last.date.isoformat() if last else None,
             "next_expected": (last.date + timedelta(days=step)).isoformat() if last else "",
-            "previous_amount": None, "price_changed_on": None, "active": True, "manual": True, "match": d.match}
+            "previous_amount": None, "price_changed_on": None, "active": True, "manual": True, "match": d.match,
+            "off_ledger": not charges}
 
 
 def overview(today: date | None = None) -> dict:

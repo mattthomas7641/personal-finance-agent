@@ -252,8 +252,11 @@ def cash_flow(today: date | None = None) -> dict:
     today = today or date.today()
     recent = _full_months(today)[:3]
     spend, income = monthly_by_category(today)
+    from app.subscriptions import off_ledger_monthly
+
     inc = sum(income.get(m, 0) for m in recent) / 3
-    sp = sum(v.get(m, 0) for v in spend.values() for m in recent) / 3
+    off = off_ledger_monthly()  # subscriptions on a card that isn't connected
+    sp = sum(v.get(m, 0) for v in spend.values() for m in recent) / 3 + off
     with session() as s:
         window = [t for t in s.exec(select(Txn).where(Txn.date >= date.fromisoformat(min(recent) + "-01"),
                                                      Txn.date < today.replace(day=1))).all()]
@@ -263,7 +266,7 @@ def cash_flow(today: date | None = None) -> dict:
         if t.id in skip:
             totals[skip[t.id]] += t.amount / 3
     return {"months": sorted(recent), "avg_income": round(inc, 2), "avg_spending": round(sp, 2), "avg_surplus": round(inc - sp, 2),
-            "left_out": {k: round(v, 2) for k, v in totals.items()}}
+            "left_out": {k: round(v, 2) for k, v in totals.items()}, "off_ledger": off}
 
 
 def where_to_cut(today: date | None = None) -> list[dict]:
