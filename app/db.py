@@ -26,7 +26,7 @@ def _sqlite_pragmas(dbapi_conn, _):
 AGENT_VIEW = """
 CREATE VIEW transactions AS
 SELECT t.date, strftime('%Y-%m', t.date) AS month, t.amount, t.merchant, t.raw_name AS description,
-       t.category, t.pending, a.name AS account, a.type AS account_type
+       t.category, t.tag, t.pending, a.name AS account, a.type AS account_type
 FROM txn t LEFT JOIN account a ON a.id = t.account_id
 """
 

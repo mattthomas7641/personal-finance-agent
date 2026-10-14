@@ -12,6 +12,8 @@
       {% for c in categories + ["Uncategorized"] %}<option {% if c == f.category %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
     <select name="source" class="field !w-auto" aria-label="Categorized by" onchange="this.form.submit()"><option value="">Any source</option>
       {% for s in ["user", "rule", "memory", "plaid", "llm"] %}<option value="{{ s }}" {% if s == f.source %}selected{% endif %}>{{ {"user": "You", "rule": "Rule", "memory": "Memory", "plaid": "Plaid", "llm": "AI"}[s] }}</option>{% endfor %}</select>
+    <select name="tag" class="field !w-auto" aria-label="Tag" onchange="this.form.submit()">
+      {% for v, l in [("", "Any tag"), ("any", "Tagged"), ("one_off", "One-offs"), ("bad_investment", "Bad investments")] %}<option value="{{ v }}" {% if v == f.tag %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
     <span class="sm:ml-auto hint">{{ "{:,}".format(count) }} transaction{{ "s" if count != 1 }} · {{ total|money }} spent</span>
   </form>
   {% if summary %}<div class="px-4 py-3 border-b border-[var(--line-soft)] bg-[var(--head)] flex flex-wrap gap-x-8 gap-y-2 text-[13px]">
@@ -19,10 +21,11 @@
     <div><div class="stat-l">Charges</div><div class="font-semibold text-[16px] num">{{ summary.count }}</div></div>
     <div><div class="stat-l">Average charge</div><div class="font-semibold text-[16px] num">{{ summary.avg|money }}</div></div>
     <div><div class="stat-l">Per month</div><div class="font-semibold text-[16px] num">{{ summary.per_month|money }}</div></div>
+    <a href="/subscriptions?match={{ f.q|urlencode }}#add" class="btn btn-sm self-center sm:ml-auto">Track as a subscription</a>
   </div>{% endif %}
   <div class="overflow-x-auto">
   <table class="tbl">
-    <thead><tr><th>Date</th><th>Merchant</th><th class="hidden md:table-cell">Account</th><th>Category</th><th class="r">Amount</th></tr></thead>
+    <thead><tr><th>Date</th><th>Merchant</th><th class="hidden md:table-cell">Account</th><th>Category</th><th class="hidden md:table-cell">Tag</th><th class="r">Amount</th></tr></thead>
     <tbody>
     {% for t, acct in rows %}
       <tr>
@@ -34,16 +37,20 @@
             {% if not t.category %}<option value="">—</option>{% endif %}
             {% for c in categories %}<option {% if c == t.category %}selected{% endif %}>{{ c }}</option>{% endfor %}
           </select> <span class="text-[12px] c-muted hidden lg:inline">{{ t.category_source }}</span></td>
+        <td class="hidden md:table-cell whitespace-nowrap">{% if t.amount > 0 %}
+          <select name="tag" class="field !w-auto !h-8 text-[13px]" aria-label="Tag" hx-post="/txn/{{ t.id }}/tag" hx-trigger="change" hx-target="next span">
+            {% for v, l in [("", "—"), ("one_off", "One-off"), ("bad_investment", "Bad investment")] %}<option value="{{ v }}" {% if t.tag == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+          </select> <span></span>{% endif %}</td>
         <td class="r whitespace-nowrap {{ 'c-ok' if t.amount < 0 }}">{{ ("+" ~ ((-t.amount)|money)) if t.amount < 0 else t.amount|money }}</td>
       </tr>
-    {% else %}<tr><td colspan="5" class="text-center c-muted py-10">No transactions match these filters.</td></tr>{% endfor %}
+    {% else %}<tr><td colspan="6" class="text-center c-muted py-10">No transactions match these filters.</td></tr>{% endfor %}
     </tbody>
   </table>
   </div>
   {% if pages > 1 %}<div class="panel-f flex items-center justify-between">
     <span>Page {{ page }} of {{ pages }}</span>
     <span class="flex gap-2">
-      {% set qs = "month=" ~ (f.month|urlencode) ~ "&category=" ~ (f.category|urlencode) ~ "&q=" ~ (f.q|urlencode) ~ "&source=" ~ (f.source|urlencode) %}
+      {% set qs = "month=" ~ (f.month|urlencode) ~ "&category=" ~ (f.category|urlencode) ~ "&q=" ~ (f.q|urlencode) ~ "&source=" ~ (f.source|urlencode) ~ "&tag=" ~ (f.tag|urlencode) %}
       {% if page > 1 %}<a class="btn btn-sm" href="/transactions?{{ qs }}&page={{ page - 1 }}">Newer</a>{% endif %}
       {% if page < pages %}<a class="btn btn-sm" href="/transactions?{{ qs }}&page={{ page + 1 }}">Older</a>{% endif %}
     </span></div>{% endif %}

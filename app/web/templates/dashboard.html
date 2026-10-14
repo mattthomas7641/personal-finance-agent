@@ -95,19 +95,32 @@
       </div>
     </section>
 
-    {% if alerts %}
+    {% if alerts or tagged %}
     <section class="section">
       <div class="section-h"><h2>Needs a look</h2><span class="meta">{{ alerts|length }}</span></div>
       <div class="list">
         {% for a in alerts %}
-          <div id="al-{{ loop.index }}" class="!items-start">
+          {% set ai = loop.index %}
+          <div id="al-{{ ai }}" class="{{ '!flex-col !items-stretch !gap-2' if a.txn_id else '!items-start' }}">
             <div class="min-w-0 text-[13px]"><span class="c-{{ a.tone if a.tone != 'info' else 'muted' }} font-medium">{{ a.kind }}</span> · <b class="font-medium">{{ a.merchant }}</b>
               <div class="c-muted">{{ a.text }}</div></div>
-            <form hx-post="/alerts/dismiss" hx-target="#al-{{ loop.index }}" hx-swap="outerHTML"><input type="hidden" name="key" value="{{ a.key }}">
-              <button class="btn btn-ghost btn-sm">Dismiss</button></form>
+            <div class="flex flex-wrap {{ 'justify-start' if a.txn_id else 'justify-end' }} gap-1 shrink-0">
+            {% if a.txn_id %}
+              {% for v, l in [("one_off", "One-off"), ("bad_investment", "Bad investment")] %}
+              <form hx-post="/txn/{{ a.txn_id }}/tag" hx-target="#al-{{ ai }}" hx-swap="outerHTML"><input type="hidden" name="tag" value="{{ v }}"><input type="hidden" name="from_alert" value="1">
+                <button class="btn btn-sm">{{ l }}</button></form>
+              {% endfor %}
+            {% endif %}
+            <form hx-post="/alerts/dismiss" hx-target="#al-{{ ai }}" hx-swap="outerHTML"><input type="hidden" name="key" value="{{ a.key }}">
+              <button class="btn btn-ghost btn-sm">{{ "Normal" if a.txn_id else "Dismiss" }}</button></form>
+            </div>
           </div>
         {% endfor %}
       </div>
+      {% if tagged %}<p class="hint mt-2">This year:
+        {% if tagged.one_off %}<a class="link" href="/transactions?tag=one_off">{{ tagged.one_off|money0 }} in one-offs</a>{% endif %}{% if tagged.one_off and tagged.bad_investment %} · {% endif %}
+        {% if tagged.bad_investment %}<a class="link" href="/transactions?tag=bad_investment">{{ tagged.bad_investment|money0 }} in bad investments</a>{% endif %}.
+        Left out of your averages.</p>{% endif %}
     </section>
     {% endif %}
 

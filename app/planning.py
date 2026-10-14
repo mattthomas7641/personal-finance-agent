@@ -215,21 +215,35 @@ def _full_months(today: date) -> list[str]:
     return out  # most recent first
 
 
+def left_out(txns: list[Txn]) -> dict[str, str]:
+    """Charges planning averages ignore, with the reason: you tagged them one-off / bad investment, or they
+    belong to a subscription you've cancelled. Monthly totals still include them; forecasts don't."""
+    from app.subscriptions import belongs_to_cancelled
+
+    out = {t.id: t.tag for t in txns if t.tag and t.amount > 0}
+    for tid in belongs_to_cancelled(txns):
+        out.setdefault(tid, "cancelled")
+    return out
+
+
 def monthly_by_category(today: date | None = None) -> tuple[dict[str, dict[str, float]], dict[str, float]]:
-    """({category: {month: spend}}, {month: income}) over the last 12 complete months."""
+    """({category: {month: spend}}, {month: income}) over the last 12 complete months, leaving out
+    one-offs, bad investments and charges from cancelled subscriptions (see left_out)."""
     today = today or date.today()
     months = set(_full_months(today))
     spend: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     income: dict[str, float] = defaultdict(float)
     with session() as s:
-        for t in s.exec(select(Txn)).all():
-            m = t.date.strftime("%Y-%m")
-            if m not in months:
-                continue
-            if t.category == "Income":
-                income[m] += -t.amount
-            elif t.category not in NON_SPEND and t.category:
-                spend[t.category][m] += t.amount
+        txns = s.exec(select(Txn)).all()
+    skip = left_out([t for t in txns if t.date.strftime("%Y-%m") in months])
+    for t in txns:
+        m = t.date.strftime("%Y-%m")
+        if m not in months or t.id in skip:
+            continue
+        if t.category == "Income":
+            income[m] += -t.amount
+        elif t.category not in NON_SPEND and t.category:
+            spend[t.category][m] += t.amount
     return spend, income
 
 
@@ -240,7 +254,16 @@ def cash_flow(today: date | None = None) -> dict:
     spend, income = monthly_by_category(today)
     inc = sum(income.get(m, 0) for m in recent) / 3
     sp = sum(v.get(m, 0) for v in spend.values() for m in recent) / 3
-    return {"months": sorted(recent), "avg_income": round(inc, 2), "avg_spending": round(sp, 2), "avg_surplus": round(inc - sp, 2)}
+    with session() as s:
+        window = [t for t in s.exec(select(Txn).where(Txn.date >= date.fromisoformat(min(recent) + "-01"),
+                                                     Txn.date < today.replace(day=1))).all()]
+    skip = left_out(window)
+    totals: dict[str, float] = defaultdict(float)
+    for t in window:
+        if t.id in skip:
+            totals[skip[t.id]] += t.amount / 3
+    return {"months": sorted(recent), "avg_income": round(inc, 2), "avg_spending": round(sp, 2), "avg_surplus": round(inc - sp, 2),
+            "left_out": {k: round(v, 2) for k, v in totals.items()}}
 
 
 def where_to_cut(today: date | None = None) -> list[dict]:
@@ -419,7 +442,7 @@ def budget_table(today: date | None = None) -> list[dict]:
     with session() as s:
         so_far: dict[str, float] = defaultdict(float)
         for t in s.exec(select(Txn).where(Txn.date >= today.replace(day=1))).all():
-            if t.category and t.category not in NON_SPEND and t.amount > 0 and t.date.strftime("%Y-%m") == this_month:
+            if t.category and t.category not in NON_SPEND and t.amount > 0 and not t.tag and t.date.strftime("%Y-%m") == this_month:
                 so_far[t.category] += t.amount
     limits = budgets()
     days_in = calendar.monthrange(today.year, today.month)[1]

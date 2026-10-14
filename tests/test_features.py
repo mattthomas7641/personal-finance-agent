@@ -202,3 +202,61 @@ def test_answer_formatting_escapes_model_output():
     html = str(_answer_html('**Total** <script>alert(1)</script>\n- <img src=x onerror=alert(1)>\n1. ok'))
     assert "<script>" not in html and "<img" not in html and "&lt;script&gt;" in html
     assert "<b>Total</b>" in html and "<ul" in html and "<ol" in html
+
+
+# ---------------- billing cycles, manual subscriptions, cancellations, tags ----------------
+
+def _add(id, day, amount, raw, merchant, category="Other"):
+    with session() as s:
+        s.merge(Txn(id=id, account_id="demo_credit", date=day, amount=amount, raw_name=raw, merchant=merchant,
+                    category=category, source="demo"))
+        s.commit()
+
+
+def test_every_two_weeks_billing_is_detected():
+    start = dt.date(2026, 7, 26)
+    for i, gap in enumerate([0, 14, 30, 44, 61, 74]):
+        _add(f"feat-ai{i}", start + dt.timedelta(days=gap), 21.60, "ANTHROPIC CLAUDE SUB", "Anthropic")
+    item = next(r for r in insights.recurring() if r["key"] == "ANTHROPIC CLAUDE SUB")
+    assert item["cadence"] == "every 2 weeks" and item["annual_cost"] == pytest.approx(21.60 * 26)
+
+
+def test_usage_based_subscription_added_by_hand():
+    _add("feat-gc1", dt.date(2026, 9, 11), 30.00, "CLOUD 52ZR7P", "Google Cloud")
+    subscriptions.add_manual("Google Cloud", "google cloud", "usage")
+    item = next(i for i in subscriptions.overview(dt.date(2026, 9, 20))["items"] if i["key"] == "manual:GOOGLE CLOUD")
+    assert item["amount"] == 30.0 and item["annual"] == 360.0 and item["manual"] and "Varies" in item["flags"]
+    subscriptions.decide("manual:GOOGLE CLOUD", "ignore")  # removing one you added deletes it
+    assert "manual:GOOGLE CLOUD" not in subscriptions.decisions()
+
+
+def test_not_a_subscription_hides_it():
+    key = subscriptions.overview()["items"][0]["key"]
+    subscriptions.decide(key, "ignore")
+    assert key not in {i["key"] for i in subscriptions.overview()["items"]}
+
+
+def test_cancelled_subscription_drops_out_of_plan_averages():
+    today = dt.date(2026, 10, 15)
+    before = planning.cash_flow(today)
+    netflix = next(i for i in subscriptions.overview(today)["items"] if "netflix" in i["merchant"].lower())
+    subscriptions.decide(netflix["key"], "cancelled", today=today)
+    after = planning.cash_flow(today)
+    assert after["avg_spending"] == pytest.approx(before["avg_spending"] - 17.99, abs=0.02)
+    assert after["left_out"]["cancelled"] == pytest.approx(17.99, abs=0.02)
+
+
+def test_tagging_a_large_charge_keeps_it_in_the_month_but_not_the_averages():
+    today = dt.date(2026, 10, 15)
+    _add("feat-tv", dt.date(2026, 8, 20), 1800.00, "BIG TV STORE", "Big TV", "Shopping")
+    before = planning.cash_flow(today)["avg_spending"]
+    with client() as c:
+        r = c.post("/txn/feat-tv/tag", data={"tag": "bad_investment", "from_alert": "1"})
+        assert r.status_code == 200 and r.text == ""
+        assert c.get("/transactions", params={"tag": "bad_investment"}).text.count("Big TV") >= 1
+    assert planning.cash_flow(today)["avg_spending"] == pytest.approx(before - 600, abs=0.01)
+    assert insights.month_summary("2026-08")["spend"] >= 1800  # still real spending that month
+    with session() as s:
+        assert s.get(Dismissal, "big:feat-tv")  # tagging from an alert also dismisses it
+    with client() as c:
+        assert c.post("/txn/feat-tv/tag", data={"tag": "nonsense"}).status_code == 400

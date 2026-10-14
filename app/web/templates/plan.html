@@ -27,6 +27,7 @@
     <div class="hero-l">To have {{ t0.target|money0 }}{% if two %}–{{ tl.target|money0 }}{% endif %} invested at {{ p.target_age }}, invest</div>
     <div class="hero-v">{{ t0.required_monthly|money0 }}<span class="text-[18px] font-medium c-muted"> a month</span></div>
     <div class="hero-s"><span class="c-{{ tone }} font-medium">{{ t0.rating }}.</span> {{ t0.why }} You invest {{ t0.investing_now|money0 }} a month now.</div>
+    {% set CF = p.cash_flow %}{% set lo = (CF.left_out if CF and CF.left_out else {}) %}{% if lo %}<p class="hint mt-2">Spending averages leave out {% for k, v in lo.items() %}{{ v|money0 }}/mo of {{ {"cancelled": "cancelled subscriptions", "one_off": "one-offs", "bad_investment": "bad investments"}.get(k, k) }}{{ ", " if not loop.last }}{% endfor %}.</p>{% endif %}
   </div>
   <div class="hero-side">
     <div><div class="stat-l">Invested</div><div class="stat-v">{{ p.invested|money0 }}</div>
