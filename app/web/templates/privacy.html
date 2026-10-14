@@ -49,8 +49,10 @@
   <ol class="text-sm list-decimal pl-5 space-y-1 text-zinc-700">
     <li>Install Tailscale (free) on this Mac and your iPhone, and sign in to the same account on both.</li>
     <li>{% if has_passcode %}✓ Passcode is set.{% else %}Set a passcode above.{% endif %}</li>
+    <li>On this Mac, run once in Terminal: <span class="mono">tailscale serve --bg 8766</span>
+      (if it asks, allow HTTPS certificates for your tailnet). This gives the app a private HTTPS address, which the iPhone needs to save pages for offline use.</li>
     <li>On your iPhone, open Safari to
-      {% if tailscale_ip %}<span class="mono font-medium">http://{{ tailscale_ip }}:8766</span>{% else %}<span class="mono">http://&lt;your Mac's Tailscale IP&gt;:8766</span> (shown here once Tailscale is running){% endif %},
+      {% if tailscale_url %}<span class="mono font-medium">{{ tailscale_url }}</span>{% else %}<span class="mono">https://&lt;your-mac&gt;.&lt;tailnet&gt;.ts.net</span> (shown here once Tailscale is running){% endif %},
       sign in, then Share → Add to Home Screen.</li>
   </ol>
 </div>

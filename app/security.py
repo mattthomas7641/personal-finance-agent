@@ -1,7 +1,9 @@
 """Who may reach the app.
 
-1. Network: only this Mac (loopback) and your Tailscale devices (100.64.0.0/10, fd7a:115c:a1e0::/48).
-   Everyone else, including other devices on the same Wi-Fi, gets a 403 before any page renders.
+1. Network: the server listens on localhost only. Your phone reaches it through `tailscale serve`, which
+   terminates HTTPS on your tailnet (https://<mac>.<tailnet>.ts.net) and proxies to localhost. Those
+   proxied requests are recognized by Tailscale's identity header / ts.net host and treated as REMOTE.
+   Direct connections from Tailscale IPs are also accepted; anything else gets a 403.
 2. Passcode: required for every non-loopback client. Stored as a salted PBKDF2 hash in data/auth.json.
    Sessions are HMAC-signed cookies (30 days). Repeated wrong guesses lock login for a while.
 """
@@ -21,6 +23,41 @@ COOKIE = "ledger_session"
 SESSION_DAYS = 30
 TAILNET = [ipaddress.ip_network("100.64.0.0/10"), ipaddress.ip_network("fd7a:115c:a1e0::/48")]
 _failures: dict[str, list[float]] = {}
+
+
+def via_tailscale_serve(headers) -> bool:
+    """Tailscale Serve strips and re-sets Tailscale-User-Login, so it can't be spoofed through the proxy."""
+    return bool(headers.get("tailscale-user-login")) or headers.get("host", "").split(":")[0].endswith(".ts.net")
+
+
+def classify(host: str | None, headers) -> str:
+    """'local' (this Mac, no passcode), 'remote' (your devices, passcode) or 'denied'."""
+    if is_local(host):
+        return "remote" if via_tailscale_serve(headers) else "local"
+    return "remote" if is_allowed_network(host) else "denied"
+
+
+OK_HOSTS = ("localhost", "127.0.0.1", "[::1]", "testserver")
+
+
+def bad_origin(method: str, headers) -> bool:
+    """Blocks DNS-rebinding (unexpected Host) and cross-site form posts (foreign Origin)."""
+    from urllib.parse import urlsplit
+
+    host = headers.get("host", "").rsplit(":", 1)[0] if not headers.get("host", "").startswith("[") else headers.get("host", "").split("]")[0] + "]"
+    if host not in OK_HOSTS and not host.endswith(".ts.net") and not _is_tailnet_ip(host):
+        return True
+    origin = headers.get("origin")
+    if method not in ("GET", "HEAD", "OPTIONS") and origin and origin != "null":
+        return urlsplit(origin).hostname != host.strip("[]")
+    return False
+
+
+def _is_tailnet_ip(h: str) -> bool:
+    try:
+        return any(ipaddress.ip_address(h.strip("[]")) in n for n in TAILNET)
+    except ValueError:
+        return False
 
 
 def is_local(host: str | None) -> bool:

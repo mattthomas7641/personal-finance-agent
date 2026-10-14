@@ -40,6 +40,20 @@ def test_lan_and_internet_are_refused():
         assert c.get("/static/tailwind.js").status_code == 403
 
 
+def test_requests_through_tailscale_serve_need_passcode():
+    # tailscale serve proxies from localhost but sets identity headers / ts.net host
+    with client(MAC) as c:
+        r = c.get("/transactions", headers={"Tailscale-User-Login": "me@example.com", "Host": "mac.tail1234.ts.net"})
+        assert r.status_code == 403 and "Set a passcode first" in r.text
+    security.set_passcode("correct-horse")
+    with client(MAC) as c:
+        r = c.get("/transactions", headers={"Host": "mac.tail1234.ts.net"})
+        assert r.status_code == 303 and "/login" in r.headers["location"]
+        r = c.post("/security/passcode", data={"passcode": "hijacked!", "confirm": "hijacked!"},
+                   headers={"Tailscale-User-Login": "me@example.com"})
+        assert r.status_code in (401, 403)
+
+
 def test_mac_needs_no_passcode():
     with client(MAC) as c:
         assert c.get("/privacy").status_code == 200
@@ -104,3 +118,10 @@ def test_pwa_assets_public():
     with client(PHONE) as c:
         assert c.get("/manifest.webmanifest").json()["display"] == "standalone"
         assert c.get("/sw.js").status_code == 200 and c.get("/static/icon-180.png").status_code == 200
+
+
+def test_cross_site_post_and_dns_rebinding_blocked():
+    with client(MAC) as c:
+        assert c.post("/connect/remove_demo", headers={"Origin": "https://evil.example.com"}).status_code == 403
+        assert c.get("/transactions", headers={"Host": "evil.example.com"}).status_code == 403
+        assert c.post("/privacy/clear_log", headers={"Origin": "http://localhost:8766", "Host": "localhost:8766"}).status_code == 303

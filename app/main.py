@@ -75,10 +75,14 @@ PUBLIC = ("/static/", "/manifest.webmanifest", "/sw.js", "/login")
 async def access_guard(request: Request, call_next):
     """Only this Mac and your Tailscale devices; non-local clients also need the passcode."""
     host = request.client.host if request.client else None
-    if not security.is_allowed_network(host):
+    kind = security.classify(host, request.headers)
+    request.state.local = kind == "local"
+    if kind == "denied":
         return PlainTextResponse("Forbidden: only this Mac and your Tailscale devices can open ledger-agent.", status_code=403)
+    if security.bad_origin(request.method, request.headers):
+        return PlainTextResponse("Forbidden: request from another site.", status_code=403)
     path = request.url.path
-    if security.is_local(host) or path.startswith(PUBLIC):
+    if kind == "local" or path.startswith(PUBLIC):
         return await call_next(request)
     if not security.has_passcode():
         return HTMLResponse("<meta name=viewport content='width=device-width'><p style='font:16px system-ui;padding:24px'>"
@@ -333,7 +337,7 @@ def logout(request: Request):
 
 @app.post("/security/passcode")
 def set_passcode(request: Request, passcode: str = Form(...), confirm: str = Form(...)):
-    if not security.is_local(request.client.host if request.client else None):
+    if not request.state.local:
         return PlainTextResponse("Change the passcode from the Mac itself.", status_code=403)
     if passcode != confirm:
         return back(f"/privacy?error={quote('Passcodes did not match')}#phone")
@@ -373,16 +377,18 @@ def privacy_page(request: Request, error: str = "", saved: str = ""):
     changed = [(r, privacy.redact(r)) for r in samples if privacy.redact(r) != " ".join(r.split())][:25]
     return render(request, "privacy.html", mode=cfg.get("mode", "standard"), terms=cfg.get("redact_terms") or [],
                   log=log, sent_chars=sent_chars, changed=changed, uncategorized=uncategorized, error=error, saved=saved,
-                  has_passcode=security.has_passcode(), is_local=security.is_local(request.client.host if request.client else None),
-                  tailscale_ip=tailscale_ip())
+                  has_passcode=security.has_passcode(), is_local=request.state.local, tailscale_url=tailscale_url())
 
 
-def tailscale_ip() -> str:
+def tailscale_url() -> str:
+    """https://<this-mac>.<tailnet>.ts.net if Tailscale is installed and logged in."""
     import shutil
     import subprocess
     exe = shutil.which("tailscale") or "/Applications/Tailscale.app/Contents/MacOS/Tailscale"
     try:
-        return subprocess.run([exe, "ip", "-4"], capture_output=True, text=True, timeout=3).stdout.strip().splitlines()[0]
+        st = json.loads(subprocess.run([exe, "status", "--json"], capture_output=True, text=True, timeout=3).stdout)
+        name = (st.get("Self") or {}).get("DNSName", "").rstrip(".")
+        return f"https://{name}" if name else ""
     except Exception:
         return ""
 
