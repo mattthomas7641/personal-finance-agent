@@ -10,3 +10,19 @@ config.yaml
 .DS_Store
 Northstar_files/
 /*.html
+
+# Bank/brokerage exports and local databases: never commit real financial data
+*.csv
+*.ofx
+*.qfx
+*.qif
+*.xlsx
+*.xls
+*.pdf
+*.db
+*.sqlite
+*.sqlite3
+*.parquet
+auth.json
+*_files/
+exports/
