@@ -92,7 +92,7 @@ def parse_fidelity_positions(text: str) -> list[dict]:
     for a in accounts.values():
         a["value"] = round(a["value"], 2)
         a["kind"] = guess_kind(a["name"])
-        # Fidelity workplace plans (NetBenefits) are often named after the employer ("PROTIVITI") and use
+        # Fidelity workplace plans (NetBenefits) are often named after the employer ("ACME CONSULTING") and use
         # all-digit plan numbers; brokerage/IRA account numbers start with a letter (Z..., X...).
         if a["kind"] == "other" and a.pop("workplace"):
             a["kind"] = "401k"
