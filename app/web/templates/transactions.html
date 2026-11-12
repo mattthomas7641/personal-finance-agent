@@ -6,13 +6,13 @@
 <section class="panel">
   <form method="get" class="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-[var(--line-soft)]">
     <input name="q" value="{{ f.q }}" placeholder="Search merchant or description" class="field sm:!w-64" aria-label="Search">
-    <select name="month" class="field !w-auto" aria-label="Month" onchange="this.form.submit()"><option value="">All months</option>
+    <select name="month" class="field !w-auto" aria-label="Month" data-autosubmit><option value="">All months</option>
       {% for m in months %}<option value="{{ m }}" {% if m == f.month %}selected{% endif %}>{{ m|mon_year }}</option>{% endfor %}</select>
-    <select name="category" class="field !w-auto" aria-label="Category" onchange="this.form.submit()"><option value="">All categories</option>
+    <select name="category" class="field !w-auto" aria-label="Category" data-autosubmit><option value="">All categories</option>
       {% for c in categories + ["Uncategorized"] %}<option {% if c == f.category %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
-    <select name="source" class="field !w-auto" aria-label="Categorized by" onchange="this.form.submit()"><option value="">Any source</option>
+    <select name="source" class="field !w-auto" aria-label="Categorized by" data-autosubmit><option value="">Any source</option>
       {% for s in ["user", "rule", "memory", "plaid", "llm"] %}<option value="{{ s }}" {% if s == f.source %}selected{% endif %}>{{ {"user": "You", "rule": "Rule", "memory": "Memory", "plaid": "Plaid", "llm": "AI"}[s] }}</option>{% endfor %}</select>
-    <select name="tag" class="field !w-auto" aria-label="Tag" onchange="this.form.submit()">
+    <select name="tag" class="field !w-auto" aria-label="Tag" data-autosubmit>
       {% for v, l in [("", "Any tag"), ("any", "Tagged"), ("one_off", "One-offs"), ("bad_investment", "Bad investments")] %}<option value="{{ v }}" {% if v == f.tag %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
     <span class="sm:ml-auto hint">{{ "{:,}".format(count) }} transaction{{ "s" if count != 1 }} · {{ total|money }} spent</span>
   </form>

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse
 from sqlmodel import func, select
 
-from app import cash, fire, insights, planning, subscriptions
+from app import cash, fire, forecast, insights, planning, rewards, subscriptions
 from app.categorize import correct
 from app.config import CATEGORIES, NON_SPEND
 from app.db import session
@@ -57,7 +57,7 @@ def dashboard(request: Request, month: str = ""):
                   cash=cash.summary(), trend=trend_items, uncategorized=uncategorized, gov=goals_ov, fp=fp,
                   register=register, nw=nw, history=fire.history(), alerts=insights.alerts(ins), digest=digest,
                   subs=subscriptions.overview(), budget_total=budget_total, budget_spent=budget_spent,
-                  tagged={k: round(v, 2) for k, v in tagged})
+                  tagged={k: round(v, 2) for k, v in tagged}, fc=forecast.forecast())
 
 
 @router.post("/alerts/dismiss")
@@ -185,3 +185,27 @@ def subscription_status(key: str = Form(...), status: str = Form(...)):
     if status in subscriptions.STATUSES:
         subscriptions.decide(key, status)
     return back("/subscriptions?saved=1")
+
+
+# ---------------- forecast and card rewards ----------------
+
+@router.get("/forecast", response_class=HTMLResponse)
+def forecast_page(request: Request):
+    return render(request, "forecast.html", fc=forecast.forecast())
+
+
+@router.get("/rewards", response_class=HTMLResponse)
+def rewards_page(request: Request, saved: str = ""):
+    from app.config import CATEGORIES, NON_SPEND
+    return render(request, "rewards.html", r=rewards.analysis(), saved=saved,
+                  categories=[c for c in CATEGORIES if c not in NON_SPEND and c not in rewards.SKIP])
+
+
+@router.post("/rewards/{account_id}")
+async def rewards_save(request: Request, account_id: str):
+    from app.config import CATEGORIES
+    from app.web.common import _num
+    form = await request.form()
+    rates = {c: _num(str(form.get(f"r_{c}", ""))) for c in CATEGORIES if str(form.get(f"r_{c}", "")).strip()}
+    rewards.save(account_id, _num(str(form.get("base_rate", "1")), 1.0), rates, _num(str(form.get("point_value_cents", "1")), 1.0))
+    return back("/rewards?saved=1")

@@ -54,7 +54,8 @@ More detail: [architecture and design decisions](docs/ARCHITECTURE.md) · [threa
 ## Cost-aware design
 
 - **Categorization** runs a cascade: your rules, built-in patterns, merchant memory, then Plaid's own category. Only the remaining **unique descriptors** go to Claude Sonnet 5, in batches of 80, so a year of transactions is one or two calls (about 2¢ per 1,000 transactions).
-- **Questions** start on Claude Haiku 5.5. If the number checker rejects an answer, the run switches to Opus 5.5. The checker is what makes a cheap model safe to try first. On the eval this is 100% correct and verified at **$0.0073 per question, about two-thirds less than Opus alone**.
+- **Questions** start on Claude Haiku 5.5. If the number checker rejects an answer, the run switches to Sonnet 5.5. The checker is what makes a cheap model safe to try first. On the eval this is 100% correct and verified at **$0.0044 per question, about 80% less than Opus alone**.
+- **The weekly digest** is one call, not an agent run: code computes every number, the model writes them up, and the checker verifies the text against exactly those facts.
 - **Prompt caching** covers the whole conversation, not just the system prompt, so each step re-reads earlier tool results at 5–10% of the input price. Planning tool output is trimmed for the model.
 - **Guardrails:** a per-question budget, a daily budget (`agent.daily_cost_usd`), and tokens, cost, time and model recorded for every question.
 
@@ -77,11 +78,12 @@ The Q&A set is 22 questions: 20 with SQL-computed answers, scored on the **headl
 |---|---|
 | Number checker catches planted numbers | 10/10 caught, 0/5 false positives |
 | Categorization accuracy (per transaction) | 96% at $0.0198 per 1,000 transactions |
-| Prompt injection via transaction descriptions | 2/2 answers unaffected by 5 planted instructions |
+| Prompt injection via transaction descriptions | 6/6 answers unaffected by 10 planted instructions |
 
 | Agent model | Correct | Verified | Steps | Cost / question |
 |---|---|---|---|---|
 | haiku-5-5 | 100% (22 q) | 95% | 4.2 | $0.0006 |
+| haiku-5-5 → sonnet-5-5 | 100% (22 q) | 100% | 4.3 | $0.0044 |
 | haiku-5-5 → opus-5-5 | 100% (22 q) | 100% | 4.2 | $0.0073 |
 | sonnet-5-5 | 100% (22 q) | 100% | 3.8 | $0.0092 |
 | opus-5-5 | 100% (22 q) | 100% | 4.0 | $0.0213 |
@@ -123,11 +125,14 @@ Open http://localhost:8766 → **Accounts**:
 | Page | What you get |
 |---|---|
 | **Overview** | This month's spending, income and what's left, compared with last month. Spending by category with budgets, alerts you can dismiss, and subscriptions. |
-| **Plan** | One retirement target and one set of assumptions: what it takes per month, how realistic it is, a what-if calculator, and a projection against your actual balance history. |
+| **Plan** | One retirement target and one set of assumptions: what it takes per month, how realistic it is, a what-if calculator, a projection against your actual balance history, what to do with each paycheck (401(k) %, Roth and brokerage transfers), and your savings rate by month. |
 | **Goals & budgets** | Every goal in one list (retirement, Coast FIRE, Roth IRA, 401(k), savings goals), plus a budget table with averages and this month's pace. |
 | **Subscriptions** | Every recurring charge with its yearly cost, next charge, price history and a keep, review or cancelled decision. |
+| **Forecast** | Your checking balance over the next 30 days: expected paychecks in, bills and subscriptions out on their dates, everyday spending spread across the days, and the lowest point. |
+| **Card rewards** | Enter each card's earn rates; see the best card for each category and the rewards you'd have earned using it over the last 12 months. |
 | **Ask** | Questions answered by the agent with every number checked. It can propose a budget or target change, but only you can apply it. A weekly digest runs every 7 days. |
 | **Transactions** | Search, filter and recategorize. Mark reimbursed or one-off charges as Excluded. |
+| **Your data** | Daily database backups (last 14 kept in `data/backups`), a one-click export to CSV/JSON, and Mac notifications for things that need you (a cancelled subscription charging again, a bank needing a re-login, a category on pace to go over). |
 | **Accounts** | Connect banks through Plaid, import CSVs, add accounts by hand, and reconnect a bank that needs a new login. |
 | **Rules** | The categorization rules learned from your corrections. |
 | **Privacy & security** | A before/after preview of what is sent to the API, a log of every character sent, local-only mode and the phone passcode. |

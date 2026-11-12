@@ -403,3 +403,63 @@ def what_if(retire_age: int, monthly: float, return_pct: float, target: float, t
             "at_age": round(at_age, 0), "reach_age": reach, "need_monthly": round(need, 2),
             "gap_monthly": round(max(0.0, need - monthly), 2), "on_track": at_age >= target - 1,
             "years": round(months / 12, 1)}
+
+
+# ---------------- per-paycheck plan and savings-rate trend ----------------
+
+def paycheck_plan(today: date | None = None) -> dict | None:
+    """Turn the monthly investing target into what to do with each paycheck: the 401(k) % to set, then what to
+    move to the Roth IRA and to a brokerage account from each take-home deposit."""
+    from app import retirement as R
+    from app.planning import detect_paychecks, k401_status
+
+    today = today or date.today()
+    p = plan(today)
+    if not p or p.get("needs") or not p.get("targets"):
+        return None
+    t0 = p["targets"][0]
+    pay = detect_paychecks(today)
+    per_year = pay.per_year or 26
+    with session() as s:
+        k = s.get(Plan401k, 1)
+    k401 = k401_status(today, k) if k else None
+    rp = R._plan()
+    roth = R.roth_status(today, rp)
+    rows, monthly_covered = [], 0.0
+    if k401 and k:
+        pct = max(k401.current_pct, k401.required_pct or 0) if not k401.on_track_to_max else k401.current_pct
+        per_check = k401.gross_per_paycheck * pct / 100
+        rows.append({"what": "401(k)", "how": f"Set your contribution to {pct:g}% of pay", "per_paycheck": round(per_check, 2),
+                     "from_take_home": False, "note": "Comes out before tax, so take-home drops by less."})
+        match = k401.employer_match_year / per_year
+        rows.append({"what": "Employer match", "how": "Automatic", "per_paycheck": round(match, 2), "from_take_home": False, "note": ""})
+        monthly_covered += (per_check + match) * per_year / 12
+    if roth.allowed > 0 and not roth.maxed:
+        per_check = roth.monthly_to_max_by_dec * 12 / per_year
+        rows.append({"what": f"Roth IRA {roth.tax_year}", "how": "Transfer after each paycheck", "per_paycheck": round(per_check, 2),
+                     "from_take_home": True, "note": f"Maxes it by Dec 31 ({roth.remaining:,.0f} left)"})
+        monthly_covered += roth.monthly_to_max_by_dec
+    other = max(0.0, t0["required_monthly"] - monthly_covered) * 12 / per_year
+    rows.append({"what": "Brokerage", "how": "Transfer after each paycheck", "per_paycheck": round(other, 2), "from_take_home": True,
+                 "note": "Whatever the target still needs"})
+    from_take_home = round(sum(r["per_paycheck"] for r in rows if r["from_take_home"]), 2)
+    return {"rows": rows, "per_year": per_year, "frequency": pay.frequency, "detected": pay.detected,
+            "take_home": pay.avg_net_pay, "from_take_home": from_take_home,
+            "share_of_take_home": round(from_take_home / pay.avg_net_pay * 100, 1) if pay.avg_net_pay else None,
+            "target": t0["target"], "required_monthly": t0["required_monthly"]}
+
+
+def savings_rate_trend(today: date | None = None, months: int = 12) -> list[dict]:
+    """Share of income kept each complete month: (income - spending) / income. The number early retirement turns on."""
+    from app.insights import month_summary
+    from app.planning import _full_months
+
+    today = today or date.today()
+    out = []
+    for m in reversed(_full_months(today)[:months]):
+        s = month_summary(m)
+        if not s.get("income"):
+            continue
+        out.append({"month": m, "income": s["income"], "spending": s["spend"],
+                    "rate": round((s["income"] - s["spend"]) / s["income"] * 100, 1)})
+    return out

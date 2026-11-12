@@ -5,7 +5,7 @@
 {% block content %}
 {% set prev_label = prev.month|mon if prev else "" %}
 {% call page_header("Overview", (s.month|mon_year) ~ (" · in progress" if s.partial else "")) %}
-  <form method="get"><select name="month" class="field !w-auto" aria-label="Month" onchange="this.form.submit()">
+  <form method="get"><select name="month" class="field !w-auto" aria-label="Month" data-autosubmit>
     {% for m in months %}<option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ m|mon_year }}</option>{% endfor %}</select></form>
   {% if uncategorized %}<a href="/transactions?category=Uncategorized" class="btn">{{ uncategorized }} uncategorized</a>{% endif %}
 {% endcall %}
@@ -61,7 +61,7 @@
         <thead><tr><th>Category</th><th class="hidden sm:table-cell w-[34%]"></th><th class="r">Spent</th>{% if s.partial %}<th class="r hidden sm:table-cell">Pace</th>{% endif %}<th class="r">Budget</th></tr></thead>
         <tbody>
         {% for c in s.categories %}
-          <tr class="click" onclick="location.href='/transactions?month={{ month }}&category={{ c.category|urlencode }}'">
+          <tr class="click" data-href="/transactions?month={{ month }}&category={{ c.category|urlencode }}">
             <td class="whitespace-nowrap"><a href="/transactions?month={{ month }}&category={{ c.category|urlencode }}" class="font-medium">{{ c.category }}</a>
               {% if c.over %} {{ badge("Over", "bad") }}{% elif c.budget and s.partial and c.projected > c.budget %} {{ badge("On pace to go over", "warn") }}{% endif %}</td>
             <td class="hidden sm:table-cell"><div class="bar"><span class="{{ 'bad' if c.over else '' }}" style="width: {{ (c.spent / mx * 100)|round }}%"></span></div></td>
@@ -125,6 +125,14 @@
     {% endif %}
 
     <section class="section">
+      <div class="section-h"><h2>Next 30 days</h2><a href="/forecast" class="link text-[13px]">Forecast</a></div>
+      <p class="text-[14px]">Checking's lowest point: <b class="font-semibold {{ 'c-bad' if fc.lowest < 0 }}">{{ fc.lowest|money0 }}</b> <span class="c-muted">around {{ fc.lowest_on[5:] }}</span></p>
+      {% if fc.events %}<div class="list mt-2">
+        {% for e in fc.events[:4] %}<div class="text-[13px]"><span class="truncate">{{ e.name }}</span><span class="whitespace-nowrap {{ 'c-ok' if e.amount > 0 else 'c-muted' }}">{{ ("+" ~ (e.amount|money0)) if e.amount > 0 else e.amount|money0 }} · {{ e.date[5:] }}</span></div>{% endfor %}
+      </div>{% endif %}
+    </section>
+
+    <section class="section">
       <div class="section-h"><h2>Subscriptions</h2><a href="/subscriptions" class="link text-[13px]">Manage</a></div>
       <p class="text-[14px]"><b class="font-semibold">{{ subs.annual|money0 }}</b> a year <span class="c-muted">({{ subs.monthly|money0 }}/mo)</span>
         {% if subs.to_review %} · <a class="link" href="/subscriptions">{{ subs.to_review }} to review</a>{% endif %}</p>
@@ -145,7 +153,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (() => {
   const labels = {{ trend|map(attribute=0)|list|tojson }}, values = {{ trend|map(attribute=1)|map('round', 2)|list|tojson }};
   const sel = {{ month|tojson }}, avg = values.reduce((a, b) => a + b, 0) / (values.length || 1);

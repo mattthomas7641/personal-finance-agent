@@ -57,6 +57,18 @@
   </div>
 </section>
 
+<section id="data" class="panel mb-5 scroll-mt-20">
+  <div class="panel-h"><h2>Your data</h2><span class="meta">{{ backups|length }} daily backups kept</span></div>
+  <div class="panel-b flex flex-wrap gap-6 items-start">
+    <div class="max-w-md"><p class="text-[14px]">Download everything as plain CSV and JSON: transactions, accounts, goals, budgets, rules, subscription decisions and balance history. Bank access tokens and your passcode are never included.</p>
+      <a class="btn btn-primary mt-3" href="/export">Download my data</a></div>
+    <div class="min-w-[16rem] flex-1"><div class="stat-l mb-1">Backups in data/backups (newest first)</div>
+      <dl class="list text-[13px]">{% for name, size in backups[:5] %}<div><dt class="mono">{{ name }}</dt><dd class="c-muted">{{ (size / 1024)|round|int }} KB</dd></div>{% else %}<div><dt class="c-muted">None yet. The first is made within a minute of starting.</dt></div>{% endfor %}</dl>
+      {% if saved == "backup" %}<p class="text-[13px] c-ok mt-2">Backup saved.</p>{% endif %}
+      <form method="post" action="/backup" class="mt-2"><button class="btn btn-sm">Back up now</button></form></div>
+  </div>
+</section>
+
 <section class="panel mb-5">
   <div class="panel-h"><h2>Scrubbing preview</h2><span class="meta">Only descriptions that changed</span></div>
   <div class="overflow-x-auto"><table class="tbl">

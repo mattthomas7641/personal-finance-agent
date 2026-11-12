@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_ui.html" import page_header, alert %}
+{% block title %}Forecast · Northstar{% endblock %}
+{% block content %}
+{% call page_header("Forecast", "Your checking balance over the next " ~ fc.days ~ " days: paychecks in, bills and subscriptions out, and your usual everyday spending.") %}{% endcall %}
+
+{% if not fc.accounts %}
+  {% call alert("info", "mb-5") %}No checking balance yet. Connect a bank on <a class="link" href="/connect">Accounts</a> or add a manual checking account, and the forecast starts from it.{% endcall %}
+{% endif %}
+{% if fc.lowest < 0 %}
+  {% call alert("bad", "mb-5") %}Checking is on track to go negative around {{ fc.lowest_on }} ({{ fc.lowest|money0 }}). Move money in before then or delay a bill.{% endcall %}
+{% endif %}
+
+<section class="hero">
+  <div>
+    <div class="hero-l">Lowest point in the next {{ fc.days }} days</div>
+    <div class="hero-v {{ 'c-bad' if fc.lowest < 0 }}">{{ fc.lowest|money0 }}</div>
+    <div class="hero-s">around {{ fc.lowest_on }} · starting from {{ fc.start|money0 }} today</div>
+  </div>
+  <div class="hero-side">
+    <div><div class="stat-l">Coming in</div><div class="stat-v c-ok">{{ fc.income|money0 }}</div><div class="stat-s">{{ "paychecks" if fc.pay_detected else "no pay schedule found" }}</div></div>
+    <div><div class="stat-l">Bills and subscriptions</div><div class="stat-v">{{ fc.bills|money0 }}</div><div class="stat-s">on their expected dates</div></div>
+    <div><div class="stat-l">Everyday spending</div><div class="stat-v">{{ (fc.everyday_per_day * fc.days)|money0 }}</div><div class="stat-s">{{ fc.everyday_per_day|money0 }} a day on average</div></div>
+    <div><div class="stat-l">In {{ fc.days }} days</div><div class="stat-v">{{ fc.end|money0 }}</div></div>
+  </div>
+</section>
+
+<section class="panel mb-6">
+  <div class="panel-h"><h2>Checking balance</h2><span class="meta">{{ fc.accounts|map(attribute="name")|join(", ") }}</span></div>
+  <div class="panel-b"><div class="relative h-60"><canvas id="fc"></canvas></div></div>
+  <div class="panel-f">Assumes everything is paid from checking this month and your everyday spending matches your last 3 months. Bills on a credit card hit checking when you pay the card.</div>
+</section>
+
+<section>
+  <div class="section-h"><h2>Calendar</h2><span class="meta">{{ fc.events|length }} expected</span></div>
+  <table class="tbl panel">
+    <thead><tr><th>Date</th><th>What</th><th class="hidden sm:table-cell">Type</th><th class="r">Amount</th></tr></thead>
+    <tbody>
+    {% for e in fc.events %}
+      <tr><td class="whitespace-nowrap c-muted">{{ e.date }}</td><td class="font-medium">{{ e.name }}</td>
+        <td class="hidden sm:table-cell c-muted">{{ {"income": "Paycheck", "bill": "Bill", "subscription": "Subscription"}[e.kind] }}</td>
+        <td class="r {{ 'c-ok' if e.amount > 0 }}">{{ ("+" ~ (e.amount|money)) if e.amount > 0 else e.amount|money }}</td></tr>
+    {% else %}<tr><td colspan="4" class="c-muted">Nothing scheduled. Bills and paychecks appear once there are a few months of history.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<script nonce="{{ csp_nonce }}">
+(() => {
+  const s = {{ fc.series|tojson }};
+  new Chart(document.getElementById('fc'), {type: 'line',
+    data: {labels: s.map(p => p.date.slice(5)), datasets: [
+      {data: s.map(p => p.balance), borderColor: '#2451c7', backgroundColor: 'rgba(36,81,199,.08)', fill: true, borderWidth: 2, pointRadius: 0, tension: .2},
+      {data: s.map(() => 0), borderColor: '#f04438', borderDash: [4, 4], borderWidth: 1, pointRadius: 0}]},
+    options: {maintainAspectRatio: false, plugins: {legend: {display: false}, tooltip: {filter: i => i.datasetIndex === 0,
+      callbacks: {label: i => '$' + Math.round(i.raw).toLocaleString()}}},
+      scales: {x: {grid: {display: false}, ticks: {maxTicksLimit: 8, maxRotation: 0}}, y: {border: {display: false}, ticks: {maxTicksLimit: 5, callback: v => '$' + v.toLocaleString()}}}}});
+})();
+</script>
+{% endblock %}

@@ -4,6 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 DEMO="$(mktemp -d -t northstar-demo)"
 export LEDGER_DATA="$DEMO"
+export NORTHSTAR_NO_NOTIFY=1
 .venv/bin/python - <<'PY'
 from app.db import init_db, session
 from app.ingest.sources import load_demo

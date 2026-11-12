@@ -23,8 +23,8 @@
           <td>{% if it.status == "ok" %}{{ badge("Syncing", "ok") }}{% elif it.status == "expiring" %}{{ badge("Expires " ~ (it.consent_expires.strftime("%b %d") if it.consent_expires else "soon"), "warn") }}{% elif it.status == "login_required" %}{{ badge("Needs login", "bad") }}{% elif it.status == "unavailable" %}{{ badge("Retrying", "warn") }}{% else %}{{ badge("Error", "bad") }}{% endif %}</td>
           <td class="hidden sm:table-cell c-muted text-[13px]">{{ it.last_synced.strftime("%b %d, %H:%M") if it.last_synced else "Never" }}</td>
           <td class="r"><div class="inline-flex flex-wrap justify-end items-center gap-2">
-            {% if it.status not in ("ok", "unavailable") %}<button type="button" class="btn btn-sm btn-primary" onclick="reconnect('{{ it.id }}')">Reconnect</button>{% endif %}
-            <form method="post" action="/connect/{{ it.id }}/disconnect" class="inline-flex items-center gap-2" onsubmit="return confirm('Disconnect {{ (it.institution or 'this bank')|e }}? Plaid will stop syncing it.')">
+            {% if it.status not in ("ok", "unavailable") %}<button type="button" class="btn btn-sm btn-primary" data-reconnect="{{ it.id }}">Reconnect</button>{% endif %}
+            <form method="post" action="/connect/{{ it.id }}/disconnect" class="inline-flex items-center gap-2" data-confirm="Disconnect {{ (it.institution or 'this bank')|e }}? Plaid will stop syncing it.">
               <label class="text-[12px] c-muted hidden sm:flex items-center gap-1"><input type="checkbox" name="keep_history" value="1" checked> Keep history</label>
               <button class="btn btn-sm btn-danger">Disconnect</button></form></div></td>
         </tr>
@@ -50,7 +50,7 @@
         <td class="r hidden sm:table-cell"><input form="cash-{{ a.id }}" name="apy_pct" class="field !w-20 !h-8 text-right" inputmode="decimal" value="{{ a.apy_pct }}" aria-label="APY"></td>
         <td class="hidden md:table-cell"><input form="cash-{{ a.id }}" name="detect_pattern" class="field !h-8" placeholder="MARCUS" value="{{ a.detect_pattern }}" aria-label="Transfers show as"></td>
         <td class="r whitespace-nowrap"><form id="cash-{{ a.id }}" method="post" action="/accounts/manual/{{ a.id }}" class="inline-flex gap-1">
-          <button class="btn btn-sm">Save</button><button name="delete" value="1" class="btn btn-sm btn-ghost btn-danger" onclick="return confirm('Remove {{ a.name|e }}?')">Remove</button></form></td>
+          <button class="btn btn-sm">Save</button><button name="delete" value="1" class="btn btn-sm btn-ghost btn-danger" data-confirm="Remove {{ a.name|e }}?">Remove</button></form></td>
       </tr>
     {% else %}<tr><td colspan="5" class="c-muted">None yet.</td></tr>{% endfor %}
     </tbody>
@@ -98,7 +98,7 @@
 <p class="hint mt-4">Bank logins happen inside Plaid's own window. Northstar never sees your bank password, and the Plaid access token is never shown to the AI. <a class="link" href="https://mattthomas7641.github.io/northstar/privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>
 
 <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 async function reconnect(itemId) {   // Plaid Link in update mode: log in again, same bank, same history
   const r = await fetch('/api/link_token?item_id=' + encodeURIComponent(itemId), {method: 'POST'}).then(r => r.json());
   if (r.error) { alert(r.error); return; }

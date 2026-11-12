@@ -87,7 +87,8 @@ async def digest_now():
     if spent_today() >= float((load_config().get("agent") or {}).get("daily_cost_usd", 2.0)):
         STATUS["message"] = "Today's question budget is used up. The digest can run tomorrow."
         return back("/")
-    return back(f"/runs/{runner.launch(runner.DIGEST.format(day=dt.date.today().isoformat()), kind='digest')}")
+    from app import digest
+    return back(f"/runs/{digest.launch()}")
 
 
 @router.post("/proposals/{pid}/{action}")

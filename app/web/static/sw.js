@@ -1,9 +1,9 @@
 // Northstar service worker: keeps a copy of the pages you open so the app still shows your
 // last-synced numbers when the Mac is asleep or off. Asking questions and syncing need the Mac.
-const CACHE = "northstar-v8";
+const CACHE = "northstar-v9";
 const MAX_AGE_MS = 7 * 24 * 3600 * 1000;  // saved pages older than a week are dropped, not shown
-const ASSETS = ["/static/tailwind.js", "/static/htmx.min.js", "/static/chart.umd.min.js", "/static/icon-180.png"];
-const CORE = ["/", "/plan", "/goals", "/subscriptions", "/transactions", "/runs"];  // refreshed in the background whenever the Mac is reachable
+const ASSETS = ["/static/tailwind.js", "/static/htmx.min.js", "/static/chart.umd.min.js", "/static/app.js", "/static/chart-setup.js", "/static/icon-180.png"];
+const CORE = ["/", "/plan", "/goals", "/subscriptions", "/forecast", "/transactions", "/runs"];  // refreshed in the background whenever the Mac is reachable
 let lastRefresh = 0;
 
 self.addEventListener("install", (e) => {
@@ -42,7 +42,7 @@ function ago(iso) {
 function offlineBanner(when) {
   return `<div style="position:sticky;top:0;z-index:50;background:#fef3c7;color:#92400e;font:14px system-ui;padding:8px 16px;text-align:center">
     Mac offline · showing data from ${ago(when)}. Questions and sync work when it's back.</div>
-    <script>window.LEDGER_OFFLINE = true;</script>`;
+    `;
 }
 
 self.addEventListener("fetch", (e) => {
@@ -88,7 +88,7 @@ self.addEventListener("fetch", (e) => {
           <p style="font:16px system-ui;padding:24px">Your Mac is offline and this page hasn't been saved on this phone yet.
           Open it once while the Mac is on.</p>`, { headers: { "content-type": "text/html" } });
       }
-      const body = (await hit.text()).replace(/<body([^>]*)>/, (m) => m + offlineBanner(hit.headers.get("x-cached-at")));
+      const body = (await hit.text()).replace(/<body([^>]*)>/, (m, attrs) => `<body data-offline="1"${attrs}>` + offlineBanner(hit.headers.get("x-cached-at")));
       return new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
     }
   })());

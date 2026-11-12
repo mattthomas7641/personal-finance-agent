@@ -13,6 +13,7 @@
   <script src="/static/tailwind.js"></script>
   <script src="/static/htmx.min.js"></script>
   <script src="/static/chart.umd.min.js"></script>
+  <script src="/static/chart-setup.js"></script>
   <style>
     :root {
       --bg: #f4f5f7; --panel: #fff; --line: #e3e6eb; --line-soft: #eef0f3; --head: #f9fafb;
@@ -145,15 +146,16 @@
   "subs": "M4 7h16v12H4zM4 11h16M8 3v4M16 3v4", "plan": "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01",
   "goals": "M5 21V4m0 0h11.5l-2.2 4.2 2.2 4.3H5", "ask": "M20.5 12a8.5 8.5 0 0 1-12.4 7.5L3.5 20.5l1-4.4A8.5 8.5 0 1 1 20.5 12z",
   "accounts": "M3 10h18M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20.5h18M12 3.5l9 4.5H3z", "rules": "M4 5h16l-6.2 7.2V18l-3.6 2v-7.8z",
-  "privacy": "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"} %}
+  "privacy": "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z", "forecast": "M3 3v18h18M7 15l4-4 3 3 6-6",
+  "rewards": "M3 7h18v10H3zM3 11h18M7 15h3"} %}
 {% set nav = [
-  ("Money", [("/", "Overview", ICON.overview), ("/transactions", "Transactions", ICON.txns), ("/subscriptions", "Subscriptions", ICON.subs)]),
+  ("Money", [("/", "Overview", ICON.overview), ("/transactions", "Transactions", ICON.txns), ("/subscriptions", "Subscriptions", ICON.subs), ("/forecast", "Forecast", ICON.forecast), ("/rewards", "Card rewards", ICON.rewards)]),
   ("Planning", [("/plan", "Plan", ICON.plan), ("/goals", "Goals & budgets", ICON.goals)]),
   ("Assistant", [("/runs", "Ask", ICON.ask)]),
   ("Settings", [("/connect", "Accounts", ICON.accounts), ("/rules", "Rules", ICON.rules), ("/privacy", "Privacy & security", ICON.privacy)]),
 ] %}
 {% macro icon(d, size=18) %}<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ d }}"/></svg>{% endmacro %}
-{% set on = path if path in ["/", "/transactions", "/subscriptions", "/connect", "/plan", "/goals", "/runs", "/rules", "/privacy"] else ("/runs" if path.startswith("/runs") else path) %}
+{% set on = path if path in ["/", "/transactions", "/subscriptions", "/forecast", "/rewards", "/connect", "/plan", "/goals", "/runs", "/rules", "/privacy"] else ("/runs" if path.startswith("/runs") else path) %}
 <body>
   {% if not hide_nav %}
   <aside class="sidebar hidden md:flex">
@@ -172,7 +174,7 @@
       <a href="/" class="flex items-center gap-2 font-semibold"><img src="/static/icon-180.png" alt="" class="w-6 h-6 rounded-md">Northstar</a>
       <details class="relative" id="menu">
         <summary class="btn btn-ghost btn-sm" aria-label="All pages">{{ icon("M4 7h16M4 12h16M4 17h16", 20) }}</summary>
-        <div class="fixed inset-0 bg-black/20 z-40" onclick="document.getElementById('menu').open = false"></div>
+        <div class="fixed inset-0 bg-black/20 z-40" data-close-menu></div>
         <div class="absolute right-0 mt-2 w-60 panel p-1.5 shadow-lg z-50">
           {% for group, items in nav %}<div class="nav-label pt-2">{{ group }}</div>{% for href, label, d in items %}<a href="{{ href }}" class="nav-item {{ 'on' if on == href }}">{{ icon(d) }}{{ label }}</a>{% endfor %}{% endfor %}
         </div>
@@ -196,16 +198,6 @@
   </nav>
   {% endif %}
 
-  <script>
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
-    if (window.LEDGER_OFFLINE) {
-      document.querySelectorAll("form button, form input, form select, form textarea, [hx-post]").forEach(el => el.disabled = true);
-      document.querySelectorAll("[hx-get][hx-trigger*=every]").forEach(el => el.removeAttribute("hx-trigger"));
-    }
-    if (window.Chart) {
-      Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
-      Chart.defaults.font.size = 12; Chart.defaults.color = "#667085"; Chart.defaults.borderColor = "#eef0f3";
-    }
-  </script>
+  <script src="/static/app.js"></script>
 </body>
 </html>

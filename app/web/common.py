@@ -76,8 +76,9 @@ async def background(label: str, fn, *args):
                              f"({cat['llm']} by AI, ${cat['cost_usd']})" + (f" · {cat['left']} left" if cat["left"] else "")
                              + (f" · {cat['error']}" if cat.get("error") else "")
                              + (f" · ⚠ {', '.join(attention)} needs attention (see Accounts)" if attention else ""))
-        from app import fire
+        from app import fire, notify
         fire.snapshot()  # balances may have changed
+        notify.run()
     except Exception as e:
         log.exception(label)
         STATUS["message"] = f"{label} failed: {e}"
@@ -87,6 +88,7 @@ async def background(label: str, fn, *args):
 
 def render(request, name, **ctx):
     ctx.setdefault("status", STATUS)
+    ctx.setdefault("csp_nonce", getattr(request.state, "csp_nonce", "") if request else "")
     return templates.TemplateResponse(request, name, ctx)
 
 

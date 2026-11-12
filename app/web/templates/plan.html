@@ -19,7 +19,7 @@
 
 {% call page_header("Plan", "Retire at " ~ p.target_age ~ " · age " ~ (p.age|int) ~ " · " ~ (p.months|duration) ~ " to go") %}
   {{ saved_toast(saved) }}
-  <a href="#settings" class="btn" onclick="document.getElementById('settings').open = true">Edit target and assumptions</a>
+  <a href="#settings" class="btn" data-open="settings">Edit target and assumptions</a>
 {% endcall %}
 
 <section class="hero">
@@ -101,6 +101,30 @@
   </section>
 </div>
 
+<div class="grid lg:grid-cols-2 gap-x-8 gap-y-6 mb-6">
+  <section id="paycheck" class="min-w-0 scroll-mt-20">
+    <div class="section-h"><h2>From each paycheck</h2><span class="meta">{{ paycheck.frequency|capitalize if paycheck }} · {{ "detected from deposits" if paycheck and paycheck.detected else "assumed" }}</span></div>
+    {% if paycheck %}
+    <table class="tbl panel">
+      <thead><tr><th>Where</th><th class="hidden sm:table-cell">How</th><th class="r">Per paycheck</th></tr></thead>
+      <tbody>
+        {% for r in paycheck.rows %}<tr><td class="font-medium">{{ r.what }}<div class="hint">{{ r.note }}</div></td>
+          <td class="hidden sm:table-cell text-[13px]">{{ r.how }}</td><td class="r">{{ r.per_paycheck|money0 }}</td></tr>{% endfor %}
+        <tr class="total"><td>Moved from take-home pay</td><td class="hidden sm:table-cell"></td><td class="r">{{ paycheck.from_take_home|money0 }}</td></tr>
+      </tbody>
+    </table>
+    <p class="hint mt-2">{% if paycheck.take_home %}That's {{ paycheck.share_of_take_home }}% of a typical {{ paycheck.take_home|money0 }} paycheck. {% endif %}Together these reach {{ paycheck.required_monthly|money0 }} a month toward {{ paycheck.target|money0 }}.{% if paycheck.share_of_take_home and paycheck.share_of_take_home > 60 %} <span class="c-bad">More than most people can sustain; see What to change.</span>{% endif %}</p>
+    {% endif %}
+  </section>
+  <section class="min-w-0">
+    <div class="section-h"><h2>Savings rate by month</h2><span class="meta">Share of income you kept</span></div>
+    {% if savings %}<div class="relative h-56"><canvas id="srate"></canvas></div>
+      <p class="hint mt-2">Last 3 months: {{ ((savings[-3:]|sum(attribute="rate")) / (savings[-3:]|length))|round(1) }}% on average.
+        {% if p.targets %}Your plan needs about {{ t0.savings_rate_needed if t0.savings_rate_needed < 100 else ">100" }}%.{% endif %}</p>
+    {% else %}<p class="hint">Appears after a full month of income and spending.</p>{% endif %}
+  </section>
+</div>
+
 <section id="accounts" class="panel mb-6 scroll-mt-20">
   <div class="panel-h"><h2>Investment accounts</h2><span class="meta">{{ accounts|length }} accounts · {{ accounts|sum(attribute="balance")|money0 }}</span></div>
   <form method="post" action="/retirement/import-fidelity" enctype="multipart/form-data" class="px-4 py-3 border-b border-[var(--line-soft)] bg-[var(--head)] flex flex-wrap items-center gap-3">
@@ -137,7 +161,7 @@
     </form>
     {% if accounts %}<div class="px-4 pb-4 flex flex-wrap gap-2">
       {% for a in accounts %}<form method="post" action="/retirement/accounts/{{ a.id }}"><input type="hidden" name="balance" value="{{ a.balance }}">
-        <button name="delete" value="1" class="btn btn-sm btn-danger" onclick="return confirm('Remove {{ a.name|e }}?')">Remove {{ a.name }}</button></form>{% endfor %}
+        <button name="delete" value="1" class="btn btn-sm btn-danger" data-confirm="Remove {{ a.name|e }}?">Remove {{ a.name }}</button></form>{% endfor %}
     </div>{% endif %}
   </details>
 </section>
@@ -171,7 +195,16 @@
   </table>
 </section>
 
-<script>
+<script nonce="{{ csp_nonce }}">
+(() => {
+  const sr = {{ (savings or [])|tojson }}, need = {{ t0.savings_rate_needed|tojson }};
+  if (sr.length && document.getElementById("srate")) new Chart(document.getElementById("srate"), {
+    data: {labels: sr.map(m => new Date(m.month + "-15").toLocaleString("en-US", {month: "short"})), datasets: [
+      {type: "bar", data: sr.map(m => m.rate), backgroundColor: sr.map(m => m.rate < 0 ? "#f04438" : "#2451c7"), borderRadius: 3, maxBarThickness: 30},
+      {type: "line", data: sr.map(() => Math.min(need, 100)), borderColor: "#101828", borderDash: [4, 4], borderWidth: 1.5, pointRadius: 0}]},
+    options: {maintainAspectRatio: false, plugins: {legend: {display: false}, tooltip: {callbacks: {label: i => (i.datasetIndex ? "Plan needs " : "") + i.raw + "%"}}},
+      scales: {x: {grid: {display: false}, ticks: {maxRotation: 0}}, y: {border: {display: false}, ticks: {callback: v => v + "%", maxTicksLimit: 5}}}}});
+})();
 (() => {
   const t = {{ t0|tojson }}, birth = {{ birth|tojson }}, hist = {{ history|tojson }};
   const money = v => "$" + (v >= 1e6 ? (v / 1e6).toFixed(1) + "M" : Math.round(v / 1e3) + "k");

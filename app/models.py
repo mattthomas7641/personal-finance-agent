@@ -216,3 +216,18 @@ class Proposal(SQLModel, table=True):
     reason: str = ""
     status: str = "pending"  # pending | approved | rejected
     created_at: datetime = Field(default_factory=now)
+
+
+class Notified(SQLModel, table=True):
+    """Mac notifications already shown, so each event notifies once."""
+    key: str = Field(primary_key=True)
+    created_at: datetime = Field(default_factory=now)
+
+
+class CardReward(SQLModel, table=True):
+    """Rewards a credit card earns: a base rate plus category multipliers (points or % back per $1)."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    account_id: str = Field(index=True)          # the card's Account id (Plaid or CSV)
+    base_rate: float = 1.0                       # points (or %) per $1 on everything else
+    rates: str = "{}"                            # JSON {"Dining": 3, "Groceries": 3, ...}
+    point_value_cents: float = 1.0               # what one point is worth to you

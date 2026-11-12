@@ -6,7 +6,7 @@
 {% set roth = ov.roth %}
 {% call page_header("Goals & budgets", "Every goal in one list, the accounts that feed them, and your monthly spending limits.") %}
   {{ saved_toast(saved) }}
-  <a href="#new" class="btn btn-primary" onclick="document.getElementById('new').open = true">{{ icon(I.plus) }}Add savings goal</a>
+  <a href="#new" class="btn btn-primary" data-open="new">{{ icon(I.plus) }}Add savings goal</a>
 {% endcall %}
 
 <section class="panel mb-5">
@@ -15,7 +15,7 @@
     <thead><tr><th>Goal</th><th class="hidden md:table-cell w-[24%]">Progress</th><th class="hidden lg:table-cell">What it takes</th><th class="r">Status</th></tr></thead>
     <tbody>
       {% for g in register %}
-        <tr class="click" onclick="location.href='{{ g.href }}'">
+        <tr class="click" data-href="{{ g.href }}">
           <td><a href="{{ g.href }}" class="font-medium">{{ g.name }}</a><div class="text-[12px] c-muted">{{ g.detail }}</div>
             <div class="lg:hidden text-[12px] c-muted mt-0.5">{{ g.takes }}</div></td>
           <td class="hidden md:table-cell">{% if g.target %}<div class="bar"><span style="width: {{ g.progress_pct }}%"></span></div>
@@ -114,7 +114,7 @@
             <label class="lbl">Saved now<input name="current_amount" class="field" value="{{ g.current }}" {% if g.linked_account %}disabled title="Comes from the linked account"{% endif %}></label>
             <label class="lbl">Adding a month<input name="monthly_contribution" class="field" value="{{ goals|selectattr('id', 'equalto', g.id)|map(attribute='monthly_contribution')|first }}"></label>
             <div class="col-span-2 sm:col-span-3 flex gap-2"><button class="btn btn-primary">Save</button>
-              <button formaction="/goals/{{ g.id }}/delete" class="btn btn-danger" onclick="return confirm('Delete {{ g.name|e }}?')">Delete</button></div>
+              <button formaction="/goals/{{ g.id }}/delete" class="btn btn-danger" data-confirm="Delete {{ g.name|e }}?">Delete</button></div>
           </form>
         </div>
       </details>

@@ -308,14 +308,6 @@ def cache_tail(messages: list[dict]) -> list[dict]:
     return out
 
 
-DIGEST = """Write my weekly money digest for the week ending {day}. Cover, in this order and in short bullets:
-1. Spending in the last 7 days vs the 7 days before, and whether this month is on pace with my budgets.
-2. Anything new: recurring charges that started recently, price increases, possible duplicate charges.
-3. Retirement plan: invested now vs where I should be by my next birthday, and the monthly gap.
-4. One blunt action for this week.
-Use run_sql, get_insights and get_plan. Skip a section if there's nothing to report. Don't propose changes."""
-
-
 def launch(question: str, history: list[tuple[str, str]] | None = None, parent_id: int | None = None,
            kind: str = "question") -> int:
     agent = FinanceAgent(question, history or [])

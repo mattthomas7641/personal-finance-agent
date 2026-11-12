@@ -331,3 +331,22 @@ def test_saving_retirement_assumptions_keeps_the_plan_target():
         assert (rp.fire_target_low, rp.fire_target_high, rp.harsh, rp.retirement_age) == (1_500_000, 2_000_000, True, 40)
         s.delete(rp)
         s.commit()
+
+
+def test_security_headers_and_nonce_on_pages():
+    with TestClient(main.app, client=MAC) as c:
+        r = c.get("/forecast")
+        csp = r.headers["content-security-policy"]
+        nonce = csp.split("'nonce-")[1].split("'")[0]
+        assert "frame-ancestors 'none'" in csp and "object-src 'none'" in csp and "'unsafe-inline'" not in csp.split("style-src")[0]
+        assert f'nonce="{nonce}"' in r.text and r.headers["x-frame-options"] == "DENY"
+        assert c.get("/forecast").headers["content-security-policy"] != csp  # fresh nonce per response
+    with TestClient(main.app, client=("192.168.1.9", 5)) as c:
+        assert c.get("/").headers["x-content-type-options"] == "nosniff"  # even on a 403
+
+
+def test_templates_have_no_inline_event_handlers():
+    import re
+    from pathlib import Path
+    for f in Path("app/web/templates").glob("*.html"):
+        assert not re.search(r"\son(click|change|submit|input|load)=", f.read_text()), f.name

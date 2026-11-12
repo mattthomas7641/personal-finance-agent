@@ -38,7 +38,7 @@
         <td class="hidden lg:table-cell text-[13px] c-muted">{% for h in i.history[-3:] %}{{ h.amount|money }}{% if not loop.last %} → {% endif %}{% endfor %}</td>
         <td class="r"><form method="post" action="/subscriptions/status" class="inline-flex">
           <input type="hidden" name="key" value="{{ i.key }}">
-          <select name="status" class="field !w-auto !h-8 text-[13px]" aria-label="Decision for {{ i.merchant }}" onchange="this.form.submit()">
+          <select name="status" class="field !w-auto !h-8 text-[13px]" aria-label="Decision for {{ i.merchant }}" data-autosubmit>
             {% for v, l in [("review", "To review"), ("keep", "Keep"), ("cancelled", "Cancelled"), ("ignore", "Remove" if i.manual else "Not a subscription")] %}<option value="{{ v }}" {% if i.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
           </select></form></td>
       </tr>

@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from sqlmodel import delete, func, select
 import yaml
 
-from app import privacy, security
+from app import backup, privacy, security
 from app.config import ROOT, load_config
 from app.db import session
 from app.models import Outbound, Txn
@@ -91,7 +91,8 @@ def privacy_page(request: Request, error: str = "", saved: str = ""):
     changed = [(r, privacy.redact(r)) for r in samples if privacy.redact(r) != " ".join(r.split())][:25]
     return render(request, "privacy.html", mode=cfg.get("mode", "standard"), terms=cfg.get("redact_terms") or [],
                   log=log, sent_chars=sent_chars, changed=changed, uncategorized=uncategorized, error=error, saved=saved,
-                  has_passcode=security.has_passcode(), is_local=request.state.local, tailscale_url=tailscale_url())
+                  has_passcode=security.has_passcode(), is_local=request.state.local, tailscale_url=tailscale_url(),
+                  backups=[(b.name, b.stat().st_size) for b in reversed(backup.backups())])
 
 
 def tailscale_url() -> str:
@@ -124,3 +125,24 @@ def privacy_clear():
         s.exec(delete(Outbound))
         s.commit()
     return back("/privacy")
+
+
+# ---------------- your data: export and backups ----------------
+
+@router.get("/export")
+def export_data():
+    import datetime as dt
+
+    from fastapi.responses import Response
+
+    from app import backup
+    return Response(backup.export_zip(), media_type="application/zip", headers={
+        "Content-Disposition": f'attachment; filename="northstar-export-{dt.date.today().isoformat()}.zip"',
+        "Cache-Control": "no-store"})
+
+
+@router.post("/backup")
+def backup_now():
+    from app import backup
+    backup.backup_now(force=True)
+    return back("/privacy?saved=backup#data")

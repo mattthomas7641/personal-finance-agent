@@ -48,6 +48,9 @@ sequenceDiagram
 | `app/ingest/` | Plaid `transactions/sync` with per-bank isolation and update mode; CSV and Fidelity parsers; synthetic demo ledger |
 | `app/privacy.py` | Redaction before anything leaves the machine, outbound log, Keychain storage |
 | `app/planning.py`, `retirement.py`, `fire.py`, `cash.py` | Deterministic finance maths (401(k), Roth, FI/Coast FIRE, retire-by-age plan, what-if, balance snapshots, cash accounts). Every page uses one shared timeline and one target, so they always agree on what's needed per month (tested) |
+| `app/forecast.py` | 30-day checking forecast: detected paychecks, bills and subscriptions on their next dates, everyday spending spread evenly |
+| `app/rewards.py` | Card earn rates, best card per category, rewards earned vs possible |
+| `app/backup.py`, `app/notify.py` | Daily SQLite backups with 14-day retention and the CSV/JSON export; one-time Mac notifications via `osascript` with text passed as arguments |
 | `app/subscriptions.py` | Recurring charges with yearly cost, next charge, price history and keep / review / cancelled decisions; flags charges after a cancellation |
 | `evals/run.py` | Evals on a synthetic ledger with SQL-derived ground truth; per-model scoreboard |
 
@@ -70,8 +73,10 @@ sequenceDiagram
 
 The agent's tools are read-only. Two tools, `propose_budget` and `propose_retirement_target`, only write a `Proposal`
 row (validated: spending categories only, sane ranges). The run page shows each as an Approve / Reject card, and the
-route behind Approve is the only code path that applies a change. The weekly digest is the same agent on a schedule
-(every 7 days, skipped in local-only mode or when the daily budget is spent), so its numbers are checked too.
+route behind Approve is the only code path that applies a change. The weekly digest (`app/digest.py`) doesn't use the
+agent loop at all: code computes the week's facts, one call writes them up, and the number checker verifies the
+text against exactly those facts (one retry, then the backup model). It runs every 7 days and is skipped in
+local-only mode or when the daily budget is spent.
 
 ## Observability
 

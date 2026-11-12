@@ -25,6 +25,7 @@ questions. It never initiates payments or moves money. It is not offered to othe
 - Every proxied or non-local client must enter a passcode (10+ characters, PBKDF2-SHA256, 300k iterations, salted). A request counts as proxied if it carries Tailscale identity headers, `X-Forwarded-*` headers or a `*.ts.net` Host. Sessions are HMAC-signed cookies (HttpOnly, SameSite=Strict, Secure over HTTPS, 30 days). Repeated wrong guesses lock login for 15 minutes. The passcode can only be changed from the Mac.
 - Known limitation: a browser on the Mac itself needs no passcode, so anything running as the owner's macOS user is trusted.
 - Cross-site writes are rejected: a foreign or `null` Origin, or a browser `Sec-Fetch-Site` other than same-origin, gets HTTP 403. DNS rebinding is blocked by a Host allow-list.
+- Every page carries a Content-Security-Policy: scripts only from the app itself, Plaid Link, or inline blocks with that response's random nonce; no inline event handlers, plugins, framing (`frame-ancestors 'none'`), `<base>` rewrites or foreign form targets. Plus `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY` and a Permissions-Policy that turns off camera, microphone, location and payment APIs. Tests check the headers and that no template uses inline handlers.
 - Pages and JSON are sent with `Cache-Control: no-store`. The phone's offline copies expire after 7 days and are deleted on sign-out or when the session expires.
 - Least privilege for the AI agent: its database connection is read-only and an SQLite authorizer only allows reading the `transactions` view, with no access to tokens or internal IDs. Each query is stopped after 3 seconds and values are capped at 1 MB, so a bad or malicious query can't stall the app.
 - Prompt injection: transaction descriptions are untrusted (anyone can name a charge). The agent is told that tool results are data, not instructions. Its tools are read-only and its only output is the answer you read. An eval plants instruction-like descriptions and checks that answers are unaffected.
@@ -61,6 +62,12 @@ and recreated to purge it. Four layers now stop that class of mistake:
 
 Screenshots must come from `scripts/demo.sh` (synthetic data). A false positive can be allowed with
 `leakguard: allow` on that line; bypassing the hooks with `--no-verify` is not acceptable for this repo.
+
+## Backups
+
+`data/ledger.db` is copied once a day with SQLite's online backup API into `data/backups/` (directory 0700, files
+0600); the newest 14 are kept. The export (Privacy & security → Download my data) is plain CSV/JSON and never
+includes bank access tokens or the passcode hash. To restore, stop Northstar and copy a backup over `data/ledger.db`.
 
 ## Data retention and deletion
 

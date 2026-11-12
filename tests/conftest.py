@@ -1,4 +1,8 @@
-"""Never touch the real macOS Keychain from tests."""
+"""Never touch the real macOS Keychain or show real notifications from tests."""
+import os
+
+os.environ["NORTHSTAR_NO_NOTIFY"] = "1"
+
 import keyring
 from keyring.backend import KeyringBackend
 

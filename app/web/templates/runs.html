@@ -29,7 +29,7 @@
     <table class="tbl">
       <thead><tr><th>Question</th><th>Status</th><th class="hidden sm:table-cell r">Steps</th><th class="hidden sm:table-cell r">Cost</th></tr></thead>
       <tbody>{% for r in runs %}
-        <tr class="click" onclick="location.href='/runs/{{ r.id }}'">
+        <tr class="click" data-href="/runs/{{ r.id }}">
           <td><a href="/runs/{{ r.id }}" class="font-medium">{{ "Weekly digest" if r.kind == "digest" else r.question }}</a>
             <div class="hint">{{ r.created_at.astimezone().strftime("%b %d, %H:%M") }}</div></td>
           <td class="whitespace-nowrap">{% if r.status == "running" %}{{ badge("Running", "info") }}{% elif r.status != "done" %}{{ badge(r.status|capitalize, "bad") }}{% elif r.verified %}<span class="c-ok text-[13px] font-medium">Verified</span>{% else %}{{ badge("Unverified", "warn") }}{% endif %}</td>
@@ -57,7 +57,7 @@
     </section>
   </div>
 </div>
-<script>
+<script nonce="{{ csp_nonce }}">
 {% if stats.by_day %}
 new Chart(document.getElementById('spend'), {type: 'bar',
   data: {labels: {{ stats.by_day|map(attribute=0)|map('replace', '2026-', '')|list|tojson }}, datasets: [{data: {{ stats.by_day|map(attribute=1)|list|tojson }}, backgroundColor: '#2451c7', borderRadius: 2, maxBarThickness: 18}]},

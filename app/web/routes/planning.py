@@ -130,6 +130,7 @@ def plan_page(request: Request, saved: str = "", imported: str = "", error: str 
     fire.daily_snapshot()
     return render(request, "plan.html", p=fire.plan(), rp=rp, birth=rp.birth_year or (k.birth_year if k else None),
                   rs=retirement.retirement_status(), accounts=accounts, history=fire.history(), saved=saved,
+                  paycheck=fire.paycheck_plan(), savings=fire.savings_rate_trend(),
                   imported=imported, error=error, today=dt.date.today(), trailing=retirement.trailing_annual_spending())
 
 

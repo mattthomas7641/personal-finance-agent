@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_ui.html" import page_header, alert, icon, I, saved_toast %}
+{% block title %}Card rewards · Northstar{% endblock %}
+{% block content %}
+{% call page_header("Card rewards", "Which card to use where, based on your last 12 months of spending.") %}{{ saved_toast(saved) }}{% endcall %}
+
+{% if r.set_up %}
+<section class="hero">
+  <div>
+    <div class="hero-l">Rewards left on the table in the last 12 months</div>
+    <div class="hero-v">{{ r.missed|money0 }}</div>
+    <div class="hero-s">You earned about {{ r.earned|money0 }}; using the best card for each category would have earned {{ r.optimal|money0 }}.</div>
+  </div>
+</section>
+
+<section class="mb-6">
+  <div class="section-h"><h2>Use this card for</h2><span class="meta">Rent and transfers left out</span></div>
+  <table class="tbl panel">
+    <thead><tr><th>Category</th><th>Best card</th><th class="r hidden sm:table-cell">Spend</th><th class="r hidden sm:table-cell">Earned</th><th class="r">With best card</th></tr></thead>
+    <tbody>
+    {% for row in r.rows %}
+      <tr><td class="font-medium">{{ row.category }}</td><td>{{ row.best_card }} <span class="hint">{{ row.best_rate|round(1) }}×</span></td>
+        <td class="r hidden sm:table-cell c-muted">{{ row.spend|money0 }}</td><td class="r hidden sm:table-cell">{{ row.earned|money }}</td>
+        <td class="r font-medium">{{ row.best_value|money }}{% if row.missed >= 1 %} <span class="c-warn text-[12px]">+{{ row.missed|money0 }}</span>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="5" class="c-muted">No card spending in the last 12 months.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% else %}
+  {% call alert("info", "mb-6") %}Enter your cards' earn rates below. You'll see the best card for each category and what you'd earn using it.{% endcall %}
+{% endif %}
+
+<section>
+  <div class="section-h"><h2>Your cards</h2><span class="meta">Points (or % back) per $1</span></div>
+  {% for c in r.cards %}
+    <details class="panel mb-3" {% if not c.set_up %}open{% endif %}>
+      <summary class="panel-h !border-0"><h2 class="flex items-center gap-1.5"><span class="chev c-muted">{{ icon(I.chev, 14) }}</span>{{ c.name }}</h2>
+        <span class="meta">{{ ("base " ~ c.base_rate ~ "× · " ~ c.rates|length ~ " bonus categories") if c.set_up else "Not set up" }}</span></summary>
+      <form method="post" action="/rewards/{{ c.account_id }}" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 px-4 pb-4 pt-3 border-t border-[var(--line-soft)]">
+        <label class="lbl">Everything else<input name="base_rate" class="field" inputmode="decimal" value="{{ c.base_rate }}"></label>
+        <label class="lbl">1 point is worth (¢)<input name="point_value_cents" class="field" inputmode="decimal" value="{{ c.point_value_cents }}"></label>
+        {% for cat in categories %}
+          <label class="lbl">{{ cat }}<input name="r_{{ cat }}" class="field" inputmode="decimal" placeholder="—" value="{{ c.rates.get(cat, '') }}"></label>
+        {% endfor %}
+        <div class="col-span-2 sm:col-span-4 lg:col-span-6"><button class="btn btn-primary">Save {{ c.name }}</button>
+          <span class="hint ml-2">For cash-back cards, enter the % (e.g. 2) and leave a point worth 1¢.</span></div>
+      </form>
+    </details>
+  {% else %}<p class="hint">No credit cards found. Connect one on <a class="link" href="/connect">Accounts</a> or import its CSV.</p>{% endfor %}
+</section>
+{% endblock %}

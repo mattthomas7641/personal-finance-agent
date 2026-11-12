@@ -146,7 +146,8 @@ def test_retirement_target_proposal_applies_on_approval():
 def test_weekly_digest_schedule(monkeypatch):
     launched = []
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
-    monkeypatch.setattr(runner, "launch", lambda q, **kw: launched.append(kw) or 1)
+    from app import digest
+    monkeypatch.setattr(digest, "launch", lambda day=None: launched.append({"kind": "digest"}) or 1)
     monkeypatch.setattr("app.privacy.local_only", lambda: False)
     now = dt.datetime(2026, 10, 19, 9, tzinfo=dt.timezone.utc)
     with session() as s:

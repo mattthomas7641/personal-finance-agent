@@ -9,7 +9,7 @@
     <a href="/login" class="btn btn-primary mt-2">Sign in again</a>
   </div></div>
 </div>
-<script>
+<script nonce="{{ csp_nonce }}">
   caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
   navigator.serviceWorker?.controller?.postMessage("clear");
 </script>

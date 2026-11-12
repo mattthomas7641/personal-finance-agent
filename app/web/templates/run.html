@@ -47,7 +47,7 @@
   <div id="trace" class="space-y-2 px-4 pb-4"></div>
 </details>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 {% for c in charts %}
 new Chart(document.getElementById('chart{{ loop.index }}'), {type: {{ c.kind|tojson }},
   data: {labels: {{ c.labels|tojson }}, datasets: [{data: {{ c["values"]|tojson }}, backgroundColor: '#2451c7', borderColor: '#2451c7', borderRadius: 3, tension: .25, maxBarThickness: 36}]},
