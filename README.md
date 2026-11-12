@@ -39,17 +39,17 @@ More detail: [architecture and design decisions](docs/ARCHITECTURE.md) · [threa
 
 | | |
 |---|---|
-| **Number checker** | Every figure in an answer must match (at its stated precision, incl. `$1.2k`, `%`) a tool result from that run (SQL, calculator, plan, goals or chart output) or the question itself. Dates in answers aren't claims, and dates or column names in tool results aren't evidence, so a wrong small count is still caught. Unverifiable answers are rejected and retried, and labeled if they still fail. |
-| **SQL sandbox** | The agent's connection is opened read-only, and a SQLite authorizer only allows reading the `transactions` view: no writes, no `ATTACH`/`PRAGMA`, and no access to the table holding Plaid tokens, even via CTEs. Queries are stopped after 3 seconds and run off the web server's event loop. |
-| **Prompt injection** | Transaction descriptions are untrusted input. The agent treats tool results as data, its tools are read-only, and an eval plants instruction-like charges to check answers stay correct. |
-| **Failure isolation** | One bank needing a re-login, a Plaid outage, a Claude API error, a failed categorization batch or a malformed file affects only that piece. Each case has a test. |
-| **Safe calculator** | AST-based arithmetic only; no names, imports or attribute access. |
-| **No double counting** | Built-in rules treat credit-card payments, transfers and investment moves as transfers, so paying your card isn't counted as spending twice. |
-| **Corrections stick** | Fix a category once and a rule re-labels every matching transaction and applies before the AI ever sees it again. |
-| **Privacy layer** | Everything sent to the API is scrubbed first: names in Zelle/Venmo/Cash App lines, emails, phone numbers, card/account digits, and any terms you list (your name, street…). Descriptors go out as numbered lines and map back locally. Amounts and dates are untouched. The **Privacy & security page** shows a before/after preview and a log of every character sent. |
-| **Local-only mode** | Categorize with your rules, built-ins and Plaid's categories only; nothing leaves the machine unless you ask a question. |
-| **Secrets** | Plaid access tokens live in the macOS Keychain, not the database; the agent's SQL can't see them or internal IDs. Data lives in `data/ledger.db` on your machine. |
-| **Boundaries** | Read-only. No money movement, no investment/tax advice. |
+| **Number checker** | Every figure in an answer must match a tool result from that run (SQL, calculator, plan, goals or chart output) or the question itself. An answer that fails is rejected and retried, and labeled if it still fails. |
+| **SQL sandbox** | The agent's database connection is read-only and can only read the `transactions` view. It cannot write, attach other databases or reach the table holding Plaid tokens. Queries stop after 3 seconds. |
+| **Prompt injection** | Transaction descriptions are treated as untrusted data. The tools are read-only, and an eval plants instruction-like charges to check that answers stay correct. |
+| **Failure isolation** | A bank needing a re-login, a Plaid outage, a Claude API error or a malformed file affects only that piece. Each case has a test. |
+| **Safe calculator** | Arithmetic only: no names, imports or attribute access. |
+| **No double counting** | Credit-card payments, transfers and investment moves are treated as transfers, so paying your card isn't counted as spending twice. |
+| **Corrections stick** | Fix a category once and a rule relabels every matching transaction, before the AI sees it again. |
+| **Privacy layer** | Names, emails, phone numbers, account digits and any terms you list are removed before anything is sent to the API. Amounts and dates are untouched. The **Privacy & security page** shows a before/after preview and a log of every character sent. |
+| **Local-only mode** | Categorize with your rules, the built-in patterns and Plaid's categories only. Nothing leaves the machine unless you ask a question. |
+| **Secrets** | Plaid access tokens live in the macOS Keychain, not the database. Your data stays in `data/ledger.db` on your machine. |
+| **Boundaries** | Read-only. No money movement, and no investment or tax advice. |
 
 ## Cost-aware design
 
@@ -87,7 +87,15 @@ The Q&A set is 22 questions: 20 with SQL-computed answers, scored on the **headl
 | opus-5-5 | 100% (22 q) | 100% | 4.0 | $0.0213 |
 <!-- scoreboard:end -->
 
-Plus 245+ tests (`pytest`, run in CI with `pip-audit` and `bandit`) covering: Fidelity positions import, Plaid update mode (re-login flagged per bank, others keep syncing), every page rendering, Roth phase-out and FI/Coast FIRE maths, SQL-sandbox escapes, calculator injection, number-checker edge cases, the privacy layer (no names, phone numbers or account digits reach the model; local-only mode never calls it; tokens live only in the Keychain), network/passcode/CSRF rules, 401(k) limit, paycheck and match maths, budget-plan invariants, CSV formats, insights on planted facts, the agent loop (hallucinated number → rejected → fixed, escalation to a stronger model) against a scripted model, failure injection (Plaid outage, Claude API errors, scheduler failure, runaway SQL, malformed uploads), cross-site and proxy rules, and an offline end-to-end test in real Chromium (run locally, not in CI).
+Plus 245+ tests (`pytest`), run in CI with `pip-audit` and `bandit`. They cover:
+
+- **Security:** SQL-sandbox escapes, calculator injection, and the passcode, session, CSRF, cross-site and proxy rules.
+- **Privacy:** no names, phone numbers or account digits reach the model, local-only mode never calls it, and tokens live only in the Keychain.
+- **The agent loop:** a hallucinated number is rejected and fixed, and a rejected answer escalates to a stronger model.
+- **Money maths:** 401(k) limits, paycheck and match maths, the Roth phase-out, FI and Coast FIRE, and budget-plan rules.
+- **Imports and sync:** CSV formats, the Fidelity import, and one bank needing a re-login while the others keep syncing.
+- **Failures:** Plaid outages, Claude API errors, scheduler failures, runaway SQL and malformed uploads.
+- **Pages:** every page renders, plus an offline end-to-end test in real Chromium (run locally, not in CI).
 
 ## Quick start
 
@@ -112,12 +120,12 @@ Open http://localhost:8766 → **Accounts**:
 
 | Page | What you get |
 |---|---|
-| **Overview** | Invested vs. where you should be by your next birthday, then this month: spent, income and left over with changes vs. last month, spending by category with pace and budgets, alerts you can dismiss, subscriptions and the weekly digest. |
-| **Plan** | One target (e.g. $1.5M–$2.0M by 40) and one set of assumptions. What it takes per month, a verdict on how realistic it is, recommendations, a **what-if** calculator (age, monthly investing, return, target), the projection with your **actual balance history**, Coast FIRE, investment accounts (Fidelity import or edit all balances at once) and where to cut. |
-| **Goals & budgets** | Every goal in one list (retirement target, Coast FIRE, Roth IRA, 401(k), savings goals). 401(k) max-out tracker with IRS limits and catch-ups, Roth IRA tracker with the MAGI phase-out, savings goals that can follow an account, and a budget table with 3- and 12-month averages and this month's pace. |
-| **Subscriptions** | Every recurring charge with its yearly cost, next expected charge, price history and a keep / review / cancelled decision. A charge after you marked something cancelled is flagged. |
-| **Ask** | Questions answered by the agent, with every number checked. The agent can **propose** a budget or a retirement-target change, but only you can apply it (Approve / Reject). A **weekly digest** runs on its own every 7 days. The page shows verified rate, cost and time per answer, cache hit rate and the eval scoreboard. |
-| **Transactions** | Search, filter and recategorize (rules are learned); a merchant search shows total, count, average and per-month spend. Mark reimbursed or one-off charges **Excluded**. |
+| **Overview** | This month's spending, income and what's left, compared with last month. Spending by category with budgets, alerts you can dismiss, and subscriptions. |
+| **Plan** | One retirement target and one set of assumptions: what it takes per month, how realistic it is, a what-if calculator, and a projection against your actual balance history. |
+| **Goals & budgets** | Every goal in one list (retirement, Coast FIRE, Roth IRA, 401(k), savings goals), plus a budget table with averages and this month's pace. |
+| **Subscriptions** | Every recurring charge with its yearly cost, next charge, price history and a keep, review or cancelled decision. |
+| **Ask** | Questions answered by the agent with every number checked. It can propose a budget or target change, but only you can apply it. A weekly digest runs every 7 days. |
+| **Transactions** | Search, filter and recategorize. Mark reimbursed or one-off charges as Excluded. |
 | **Accounts** | Connect banks through Plaid, import CSVs, add accounts by hand, and reconnect a bank that needs a new login. |
 | **Rules** | The categorization rules learned from your corrections. |
 | **Privacy & security** | A before/after preview of what is sent to the API, a log of every character sent, local-only mode and the phone passcode. |
