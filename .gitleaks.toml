@@ -1,0 +1,7 @@
+# gitleaks: default rules, plus the test files that deliberately contain fake secret-shaped strings.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake credentials used to test the leak guard and the privacy layer"
+paths = ['''tests/test_leak_guard\.py''', '''tests/test_privacy\.py''', '''scripts/leak_guard\.py''']

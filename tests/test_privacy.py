@@ -23,7 +23,7 @@ init_db()
     ("CASH APP*JOHN SMITH*SENT", ["JOHN", "SMITH"], ["CASH APP"]),
     ("CHASE CREDIT CRD AUTOPAY XXXXX1234", ["1234"], ["AUTOPAY"]),
     ("ACME CORP PAYROLL PPD ID: 1234567890", ["1234567890"], ["PAYROLL"]),
-    ("Payment to bob.smith@gmail.com", ["bob", "gmail"], ["[email]"]),
+    ("Payment to bob.smith@gmail.com", ["bob", "gmail"], ["[email]"]),  # leakguard: allow (fake address in a redaction test)
     ("CALL (415) 555-0199 FOR SVC", ["555", "0199"], ["[phone]"]),
     ("SQ *BLUE BOTTLE COFFEE 0412", ["0412"], ["BLUE BOTTLE COFFEE"]),
 ])

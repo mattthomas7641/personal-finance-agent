@@ -46,6 +46,22 @@ questions. It never initiates payments or moves money. It is not offered to othe
 - A third-party-style review of security, resilience and cost was done on 2026-10-14. Its findings are fixed and covered by `tests/test_hardening.py`.
 - No secrets are committed to git (`.env`, `data/` and configuration are git-ignored; history was scanned before publishing).
 
+## Preventing leaks into the public repository
+
+The repo is public, so anything committed is published. In October 2026 a saved browser copy of the Goals page
+(real salary and goal figures) was committed by mistake; the history was rewritten and the repository deleted
+and recreated to purge it. Four layers now stop that class of mistake:
+
+| Layer | Runs | Catches |
+|---|---|---|
+| `scripts/leak_guard.py` pre-commit hook | Every commit on the owner's Mac (`scripts/install-hooks.sh`) | Blocked file types (`.env`, databases, logs, CSV/OFX/PDF exports, saved `.html` pages, `*_files/`, `.DS_Store`, keys, images outside `docs/screenshots`), API keys and tokens for the services used here, SSNs, card numbers (Luhn-checked), real email addresses, and a private denylist of identifying terms in `.leakguard.local` (git-ignored) |
+| Same guard as a pre-push hook | Every push, checking **each commit** being pushed, so something added and then deleted is still caught | Same as above |
+| CI `leaks` job | Every push and pull request | gitleaks over the full history, plus the leak guard over the tree |
+| GitHub secret scanning with push protection | On GitHub | Known credential formats, rejected before they're accepted |
+
+Screenshots must come from `scripts/demo.sh` (synthetic data). A false positive can be allowed with
+`leakguard: allow` on that line; bypassing the hooks with `--no-verify` is not acceptable for this repo.
+
 ## Data retention and deletion
 
 - Transaction data is kept locally for as long as the owner uses the app, to support year-over-year budgeting.

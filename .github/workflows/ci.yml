@@ -41,3 +41,17 @@ jobs:
         run: pip-audit -r requirements.lock
       - name: Static analysis (medium and high severity)
         run: bandit -q -r app -ll
+
+  leaks:
+    # Secrets anywhere in history (gitleaks) and personal-data/file-type rules on the current tree (leak guard).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Leak guard (personal data, exports, saved pages, screenshots)
+        run: python3 scripts/leak_guard.py --all
+

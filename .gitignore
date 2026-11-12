@@ -26,3 +26,7 @@ Northstar_files/
 auth.json
 *_files/
 exports/
+
+# Leak guard private denylist (never committed)
+.leakguard.local
+*.bundle

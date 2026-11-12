@@ -1,0 +1,5 @@
+#!/bin/sh
+# Leak guard on staged changes. Installed by scripts/install-hooks.sh (git config core.hooksPath .githooks).
+ROOT="$(git rev-parse --show-toplevel)"
+PY="$ROOT/.venv/bin/python"; [ -x "$PY" ] || PY=python3
+exec "$PY" "$ROOT/scripts/leak_guard.py" --staged

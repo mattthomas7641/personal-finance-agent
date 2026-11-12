@@ -105,6 +105,8 @@ cp .env.example .env    # add ANTHROPIC_API_KEY, PLAID_CLIENT_ID, PLAID_SECRET
 .venv/bin/uvicorn app.main:app --port 8766
 ```
 
+**Before your first commit:** `scripts/install-hooks.sh` turns on the leak guard (see [SECURITY.md](SECURITY.md#preventing-leaks-into-the-public-repository)).
+
 **Demo without any real data:** `scripts/demo.sh` starts the app on port 8767 with a synthetic 12-month ledger in a temporary folder. Screenshots and recordings should only ever come from this.
 
 Open http://localhost:8766 → **Accounts**:
