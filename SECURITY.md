@@ -42,7 +42,7 @@ questions. It never initiates payments or moves money. It is not offered to othe
 **Vulnerability and change management**
 - macOS automatic security updates are enabled.
 - Exact dependency versions are pinned in `requirements.lock`. Dependabot proposes updates weekly, and CI runs `pip-audit` (known CVEs) and `bandit` (static analysis) on every push and weekly.
-- 220+ automated tests run in CI. They cover SQL sandbox escapes and query limits, redaction, passcode/session/CSRF rules, the network allow-list, token storage, and failure isolation (Plaid outages, Claude API errors, scheduler failures, malformed files).
+- 245+ automated tests run in CI. They cover SQL sandbox escapes and query limits, redaction, passcode/session/CSRF rules, the network allow-list, token storage, and failure isolation (Plaid outages, Claude API errors, scheduler failures, malformed files).
 - A third-party-style review of security, resilience and cost was done on 2026-10-14. Its findings are fixed and covered by `tests/test_hardening.py`.
 - No secrets are committed to git (`.env`, `data/` and configuration are git-ignored; history was scanned before publishing).
 
