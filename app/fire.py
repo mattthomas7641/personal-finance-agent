@@ -357,6 +357,17 @@ def snapshot(today: date | None = None) -> dict:
     return nw
 
 
+def daily_snapshot(today: date | None = None) -> dict:
+    """For page views: record today's totals only if today has no row yet, so viewing a page normally
+    reads instead of writing. Balance changes call snapshot() directly to update today's row."""
+    from app.models import BalanceSnapshot
+
+    today = today or date.today()
+    with session() as s:
+        have = s.get(BalanceSnapshot, today) is not None
+    return net_worth() if have else snapshot(today)
+
+
 def history(days: int = 400) -> list[dict]:
     from app.models import BalanceSnapshot
 

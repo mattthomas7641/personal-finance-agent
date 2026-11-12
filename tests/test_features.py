@@ -216,18 +216,18 @@ def _add(id, day, amount, raw, merchant, category="Other"):
 def test_every_two_weeks_billing_is_detected():
     start = dt.date(2026, 7, 26)
     for i, gap in enumerate([0, 14, 30, 44, 61, 74]):
-        _add(f"feat-ai{i}", start + dt.timedelta(days=gap), 21.60, "ANTHROPIC CLAUDE SUB", "Anthropic")
-    item = next(r for r in insights.recurring() if r["key"] == "ANTHROPIC CLAUDE SUB")
-    assert item["cadence"] == "every 2 weeks" and item["annual_cost"] == pytest.approx(21.60 * 26)
+        _add(f"feat-ai{i}", start + dt.timedelta(days=gap), 9.50, "EXAMPLE AI PLUS", "Example AI")
+    item = next(r for r in insights.recurring() if r["key"] == "EXAMPLE AI PLUS")
+    assert item["cadence"] == "every 2 weeks" and item["annual_cost"] == pytest.approx(9.50 * 26)
 
 
 def test_usage_based_subscription_added_by_hand():
-    _add("feat-gc1", dt.date(2026, 9, 11), 30.00, "CLOUD 52ZR7P", "Google Cloud")
-    subscriptions.add_manual("Google Cloud", "google cloud", "usage")
-    item = next(i for i in subscriptions.overview(dt.date(2026, 9, 20))["items"] if i["key"] == "manual:GOOGLE CLOUD")
+    _add("feat-gc1", dt.date(2026, 9, 11), 30.00, "EXAMPLECLOUD BILLING", "Example Cloud")
+    subscriptions.add_manual("Example Cloud", "example cloud", "usage")
+    item = next(i for i in subscriptions.overview(dt.date(2026, 9, 20))["items"] if i["key"] == "manual:EXAMPLE CLOUD")
     assert item["amount"] == 30.0 and item["annual"] == 360.0 and item["manual"] and "Varies" in item["flags"]
-    subscriptions.decide("manual:GOOGLE CLOUD", "ignore")  # removing one you added deletes it
-    assert "manual:GOOGLE CLOUD" not in subscriptions.decisions()
+    subscriptions.decide("manual:EXAMPLE CLOUD", "ignore")  # removing one you added deletes it
+    assert "manual:EXAMPLE CLOUD" not in subscriptions.decisions()
 
 
 def test_not_a_subscription_hides_it():

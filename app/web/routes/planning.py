@@ -127,7 +127,7 @@ def plan_page(request: Request, saved: str = "", imported: str = "", error: str 
         rp = s.get(RetirementPlan, 1) or RetirementPlan()
         k = s.get(Plan401k, 1)
         accounts = s.exec(select(RetirementAccount).order_by(RetirementAccount.id)).all()
-    fire.snapshot()
+    fire.daily_snapshot()
     return render(request, "plan.html", p=fire.plan(), rp=rp, birth=rp.birth_year or (k.birth_year if k else None),
                   rs=retirement.retirement_status(), accounts=accounts, history=fire.history(), saved=saved,
                   imported=imported, error=error, today=dt.date.today(), trailing=retirement.trailing_annual_spending())

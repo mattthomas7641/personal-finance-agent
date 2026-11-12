@@ -47,7 +47,7 @@ def dashboard(request: Request, month: str = ""):
         register = fire.goal_register(goals_ov, fp)
     except Exception:
         goals_ov, fp, register = None, None, []
-    nw = fire.snapshot()
+    nw = fire.daily_snapshot()
     with session() as s:
         year_start = dt.date(dt.date.today().year, 1, 1)
         tagged = s.exec(select(Txn.tag, func.sum(Txn.amount)).where(Txn.tag != "", Txn.date >= year_start).group_by(Txn.tag)).all()
