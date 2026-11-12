@@ -89,10 +89,10 @@ The Q&A set is 22 questions: 20 with SQL-computed answers, scored on the **headl
 | opus-5-5 | 100% (22 q) | 100% | 4.0 | $0.0213 |
 <!-- scoreboard:end -->
 
-Plus 245+ tests (`pytest`), run in CI with `pip-audit` and `bandit`. They cover:
+Plus 300 tests (`pytest`), run in CI with `pip-audit`, `bandit` and `gitleaks`. They cover:
 
-- **Security:** SQL-sandbox escapes, calculator injection, and the passcode, session, CSRF, cross-site and proxy rules.
-- **Privacy:** no names, phone numbers or account digits reach the model, local-only mode never calls it, and tokens live only in the Keychain.
+- **Security:** SQL-sandbox escapes, calculator injection, the passcode, session, CSRF, cross-site and proxy rules, and the Content-Security-Policy.
+- **Privacy:** no names, phone numbers or account digits reach the model, local-only mode never calls it, tokens live only in the Keychain, and the export never includes them.
 - **The agent loop:** a hallucinated number is rejected and fixed, and a rejected answer escalates to a stronger model.
 - **Money maths:** 401(k) limits, paycheck and match maths, the Roth phase-out, FI and Coast FIRE, and budget-plan rules.
 - **Imports and sync:** CSV formats, the Fidelity import, and one bank needing a re-login while the others keep syncing.
@@ -125,17 +125,16 @@ Open http://localhost:8766 → **Accounts**:
 | Page | What you get |
 |---|---|
 | **Overview** | This month's spending, income and what's left, compared with last month. Spending by category with budgets, alerts you can dismiss, and subscriptions. |
-| **Plan** | One retirement target and one set of assumptions: what it takes per month, how realistic it is, a what-if calculator, a projection against your actual balance history, what to do with each paycheck (401(k) %, Roth and brokerage transfers), and your savings rate by month. |
+| **Plan** | One retirement target and one set of assumptions: what it takes per month, how realistic it is, a what-if calculator, a projection against your actual balance history, a per-paycheck plan and your savings rate by month. |
 | **Goals & budgets** | Every goal in one list (retirement, Coast FIRE, Roth IRA, 401(k), savings goals), plus a budget table with averages and this month's pace. |
-| **Subscriptions** | Every recurring charge with its yearly cost, next charge, price history and a keep, review or cancelled decision. |
-| **Forecast** | Your checking balance over the next 30 days: expected paychecks in, bills and subscriptions out on their dates, everyday spending spread across the days, and the lowest point. |
-| **Card rewards** | Enter each card's earn rates; see the best card for each category and the rewards you'd have earned using it over the last 12 months. |
+| **Subscriptions** | Every recurring charge with its yearly cost, next charge, price history and a keep, review or cancelled decision. Flags a charge after you cancel. |
+| **Forecast** | Your checking balance over the next 30 days, with paychecks, bills and subscriptions on their dates, and the lowest point. |
+| **Card rewards** | The best card for each category and the rewards you missed over the last 12 months. |
 | **Ask** | Questions answered by the agent with every number checked. It can propose a budget or target change, but only you can apply it. A weekly digest runs every 7 days. |
 | **Transactions** | Search, filter and recategorize. Mark reimbursed or one-off charges as Excluded. |
-| **Your data** | Daily database backups (last 14 kept in `data/backups`), a one-click export to CSV/JSON, and Mac notifications for things that need you (a cancelled subscription charging again, a bank needing a re-login, a category on pace to go over). |
 | **Accounts** | Connect banks through Plaid, import CSVs, add accounts by hand, and reconnect a bank that needs a new login. |
 | **Rules** | The categorization rules learned from your corrections. |
-| **Privacy & security** | A before/after preview of what is sent to the API, a log of every character sent, local-only mode and the phone passcode. |
+| **Privacy & security** | A before/after preview of what is sent to the API, a log of every character sent, local-only mode, the phone passcode, daily backups and a data export. |
 
 All projections are arithmetic on your own data and assumptions. Northstar never recommends investments or tax strategies.
 
