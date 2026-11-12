@@ -160,5 +160,5 @@ def test_snapshot_records_one_row_per_day():
     configure()
     fire.snapshot(TODAY)
     fire.snapshot(TODAY)
-    h = fire.history()
-    assert [r["day"] for r in h].count(TODAY.isoformat()) == 1 and h[-1]["invested"] == 58_500
+    rows = [r for r in fire.history() if r["day"] == TODAY.isoformat()]
+    assert len(rows) == 1 and rows[0]["invested"] == 58_500
