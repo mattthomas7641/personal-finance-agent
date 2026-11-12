@@ -208,3 +208,9 @@ def test_agent_marks_unverified_after_retries(monkeypatch):
     bad = [tool_use(str(i), "final_answer", {"answer": "You spent $9,999 on travel."}) for i in range(3)]
     answer, run, _ = run_agent([[b] for b in bad], monkeypatch)
     assert run.status == "done" and not run.verified
+
+
+def test_checker_treats_month_day_dates_as_dates_not_claims():
+    ev = ["2026-10-06 | 286.05"]
+    assert check("You spent $286.05 on 10-06, in the week 10-01 to 10-07.", ev) == []
+    assert check("You made 24 purchases on 10-06.", ev) == ["24"]  # a real count is still checked

@@ -15,7 +15,8 @@ NUM = re.compile(r"(?<![\w.])(-?\$?-?)(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?\s*(k|K|M|
 DATE_LIKE = re.compile(
     r"\b\d{4}-\d{2}(?:-\d{2})?\b|\b(?:19|20)\d{2}\b|"
     r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?\b|"
-    r"\b\d{1,2}(?:st|nd|rd|th)\b|\bQ[1-4]\b|\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b",
+    r"\b\d{1,2}(?:st|nd|rd|th)\b|\bQ[1-4]\b|\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b|"
+    r"\b(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\b",  # zero-padded MM-DD, e.g. "on 10-06", "10-16 to 10-22"
 )
 SOURCE_NUM = re.compile(r"-?\d+(?:\.\d+)?(?:e[+-]?\d+)?")
 # Dates and times inside tool results aren't evidence: otherwise every "2026-08-27" would "support" any
